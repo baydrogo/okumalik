@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <header>
+    <img src="icons/icon-32.png" alt="" width="16" height="16">
+    <span>Okumalık</span>
+  </header>
+  <main>
+    <p id="host"></p>
+    <textarea id="title" rows="2" placeholder="Başlık"></textarea>
+    <input id="tags" type="text" placeholder="Etiketler (virgülle ayırın)" autocomplete="off">
+    <div id="recent"></div>
+    <p id="note" hidden></p>
+    <div class="actions">
+      <button id="bookmark" type="button">Yer İmi</button>
+      <button id="readLater" type="button" class="primary">Sonra Oku</button>
+    </div>
+  </main>
+  <script src="popup.js"></script>
+</body>
+</html>

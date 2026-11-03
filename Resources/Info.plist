@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleName</key><string>Okumalık</string>
+	<key>CFBundleDisplayName</key><string>Okumalık</string>
+	<key>CFBundleIdentifier</key><string>local.okumalik</string>
+	<key>CFBundleExecutable</key><string>Okumalik</string>
+	<key>CFBundlePackageType</key><string>APPL</string>
+	<key>CFBundleShortVersionString</key><string>1.0</string>
+	<key>CFBundleVersion</key><string>1</string>
+	<key>CFBundleIconFile</key><string>AppIcon</string>
+	<key>CFBundleDevelopmentRegion</key><string>tr</string>
+	<key>LSMinimumSystemVersion</key><string>14.0</string>
+	<key>LSApplicationCategoryType</key><string>public.app-category.news</string>
+	<key>NSHighResolutionCapable</key><true/>
+	<key>NSAppTransportSecurity</key>
+	<dict><key>NSAllowsArbitraryLoads</key><true/></dict>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key><string>local.okumalik</string>
+			<key>CFBundleURLSchemes</key><array><string>okumalik</string></array>
+		</dict>
+	</array>
+</dict>
+</plist>
