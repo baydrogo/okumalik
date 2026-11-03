@@ -2,6 +2,7 @@ import SwiftUI
 
 struct SidebarView: View {
     @EnvironmentObject private var store: Store
+    @ObservedObject private var icons = SiteIcons.shared
     @Binding var selection: SidebarSection?
     @State private var renaming: Feed?
     @State private var newName = ""
@@ -31,10 +32,7 @@ struct SidebarView: View {
                     Label {
                         Text(feed.title).lineLimit(1)
                     } icon: {
-                        Text(String(feed.title.prefix(1)).uppercased())
-                            .font(.system(size: 10, weight: .semibold, design: .serif))
-                            .frame(width: 16, height: 16)
-                            .background(Circle().fill(.quaternary))
+                        feedIcon(feed)
                     }
                     .badge(store.unreadCount(feed: feed.id))
                     .tag(SidebarSection.feed(feed.id))
@@ -111,6 +109,24 @@ struct SidebarView: View {
             }
         } message: {
             Text("Bağlantılar ve akışlar silinmez, yalnızca bu etiket kaldırılır.")
+        }
+    }
+
+    /// The site's own icon; a small dot until (or unless) one is found.
+    @ViewBuilder
+    private func feedIcon(_ feed: Feed) -> some View {
+        let _ = icons.version
+        if let image = icons.icon(for: feed.siteURL ?? feed.url) {
+            Image(nsImage: image)
+                .resizable()
+                .interpolation(.high)
+                .frame(width: 16, height: 16)
+                .clipShape(RoundedRectangle(cornerRadius: 3))
+        } else {
+            Circle()
+                .fill(.tertiary)
+                .frame(width: 5, height: 5)
+                .frame(width: 16, height: 16)
         }
     }
 
