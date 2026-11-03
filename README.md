@@ -14,7 +14,7 @@ Xcode gerekmez; Command Line Tools yeterli.
 ## Özellikler
 
 - **Okunacaklar / Arşiv** — bağlantı ekle, okuyunca arşivle (⌘E).
-- **Yer İmleri** — önizleme yerine sağda düzenleme paneli açılır: başlık, açıklama ve etiketler yerinde değiştirilir. Çift tıklama ya da ⌘O bağlantıyı tarayıcıda açar.
+- **Yer İmleri** — önizleme yok; liste bütün genişliği kaplar (Linkding tarzı): site simgesi ve başlık, etiketler ve açıklama, tarih ve Aç · Düzenle · Okunacaklara Taşı · Sil. Başlığa tıklamak ya da çift tıklamak bağlantıyı tarayıcıda açar; etikete tıklamak listeyi süzer. Site simgeleri sitenin kendisinden bir kez indirilip `Icons` klasöründe saklanır.
 - **Etiketler** — okunacaklar, yer imleri ve akışlar etiketlenebilir; bir akışın etiketi o akışın yazılarını da kapsar. Sağ tık > "Etiketler" menüsünden işaretleyin ya da bağlantıyı veya akışı kenar çubuğundaki etikete sürükleyin. Etiketler kenar çubuğunda listelenir; sağ tıkla yeniden adlandırılır ya da silinir. Sağ tık > "Düzenle…" ile her bağlantının başlığı ve açıklaması değiştirilebilir.
 - **Vurgular** — metni seçince beliren araç çubuğundan "Vurgula" (ya da ⇧⌘H, sağ tık > "Vurgula"). Bir vurguya tıklayınca ya da sağ tıklayınca kopyalanabilir veya silinebilir. Vurgular sayfa tekrar açıldığında geri gelir; sağdaki panelden ya da kenar çubuğundaki "Vurgular" bölümünden Markdown olarak kopyalanır veya `.md` dosyası olarak dışa aktarılır.
 - **Akışlar** — RSS 2.0, RSS 1.0 ve Atom. Site adresi vermek yeterli, akış otomatik bulunur. OPML içe/dışa aktarma Ayarlar'da.

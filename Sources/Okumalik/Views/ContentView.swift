@@ -8,15 +8,7 @@ struct ContentView: View {
     @State private var newTag = ""
 
     var body: some View {
-        NavigationSplitView {
-            SidebarView(selection: $section)
-                .navigationSplitViewColumnWidth(min: 190, ideal: 220, max: 300)
-        } content: {
-            ItemListView(section: section ?? .readLater, selection: $selection, search: search)
-                .navigationSplitViewColumnWidth(min: 280, ideal: 340, max: 480)
-        } detail: {
-            DetailView(selection: selection)
-        }
+        split
         .searchable(text: $search, placement: .sidebar, prompt: "Ara")
         .sheet(isPresented: $store.showAddSheet) {
             AddSheet(initialKind: addKind, initialTags: currentTag.map { [$0] } ?? [])
@@ -34,6 +26,32 @@ struct ContentView: View {
             if case .entry(let id) = selection { store.setEntryRead(id, true) }
         }
         .onOpenURL { store.handleOpenURL($0) }
+    }
+
+    /// Bookmarks need no preview: their list takes the whole width next to the sidebar.
+    @ViewBuilder
+    private var split: some View {
+        if section == .bookmarks {
+            NavigationSplitView {
+                sidebar
+            } detail: {
+                ItemListView(section: .bookmarks, selection: $selection, search: search)
+            }
+        } else {
+            NavigationSplitView {
+                sidebar
+            } content: {
+                ItemListView(section: section ?? .readLater, selection: $selection, search: search)
+                    .navigationSplitViewColumnWidth(min: 280, ideal: 340, max: 480)
+            } detail: {
+                DetailView(selection: selection)
+            }
+        }
+    }
+
+    private var sidebar: some View {
+        SidebarView(selection: $section)
+            .navigationSplitViewColumnWidth(min: 190, ideal: 220, max: 300)
     }
 
     private var currentTag: String? {

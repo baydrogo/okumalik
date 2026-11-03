@@ -8,6 +8,7 @@ struct ItemListView: View {
     @AppStorage("unreadOnly") private var unreadOnly = false
     @State private var editing: UUID?
     @State private var tagFilter: String?
+    @State private var deleting: SavedItem?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -23,6 +24,16 @@ struct ItemListView: View {
             return !urls.isEmpty
         }
         .sheet(item: Binding(get: { editing.map(EditID.init) }, set: { editing = $0?.id })) { ItemEditSheet(id: $0.id) }
+        .confirmationDialog(
+            "“\(deleting?.title ?? "")” silinsin mi?",
+            isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } })
+        ) {
+            Button("Sil", role: .destructive) {
+                guard let item = deleting else { return }
+                if selection == .item(item.id) { selection = nil }
+                store.deleteItem(item.id)
+            }
+        }
     }
 
     private struct EditID: Identifiable { let id: UUID }
@@ -186,9 +197,21 @@ struct ItemListView: View {
     }
 
     private func savedRow(_ item: SavedItem) -> some View {
-        SavedRow(item: item)
-            .tag(DetailID.item(item.id))
-            .draggable(TagTarget.item(item.id).dragToken)
+        Group {
+            if section == .bookmarks {
+                BookmarkRow(
+                    item: item,
+                    onTag: { tagFilter = $0 },
+                    onEdit: { editing = item.id },
+                    onMove: { store.setKind(item.id, .readLater) },
+                    onDelete: { deleting = item }
+                )
+            } else {
+                SavedRow(item: item)
+            }
+        }
+        .tag(DetailID.item(item.id))
+        .draggable(TagTarget.item(item.id).dragToken)
     }
 
     private func deleteSelected() {
