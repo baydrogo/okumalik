@@ -48,6 +48,22 @@ final class ArticleCache {
         try? FileManager.default.removeItem(at: file(for: url))
     }
 
+    /// Deletes copies saved before `date`, except those for the given addresses.
+    func removeCopies(olderThan date: Date, keeping keep: Set<URL>) {
+        let keepFiles = Set(keep.map { file(for: $0).lastPathComponent })
+        let fm = FileManager.default
+        guard let files = try? fm.contentsOfDirectory(at: Self.directory, includingPropertiesForKeys: [.contentModificationDateKey]) else { return }
+        var removed = false
+        for file in files where file.pathExtension == "json" && !keepFiles.contains(file.lastPathComponent) {
+            let saved = (try? file.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate ?? .distantFuture
+            if saved < date {
+                try? fm.removeItem(at: file)
+                removed = true
+            }
+        }
+        if removed { memory.removeAll() }
+    }
+
     /// Extracts the given pages in the background, one at a time.
     func prefetch(_ urls: [URL]) {
         for url in urls where !contains(url) && !queue.contains(url) { queue.append(url) }

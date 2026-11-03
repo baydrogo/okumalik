@@ -5,6 +5,8 @@ struct SettingsView: View {
     @EnvironmentObject private var store: Store
     @AppStorage("readerMode") private var reader = true
     @AppStorage("refreshMinutes") private var refreshMinutes = 30
+    @AppStorage(Store.readRetentionKey) private var readRetention = 30
+    @AppStorage(Store.copyRetentionKey) private var copyRetention = 30
     @State private var status: String?
 
     private static let bookmarklets: [(String, String)] = [
@@ -19,18 +21,25 @@ struct SettingsView: View {
                 Toggle("Sayfaları okuma modunda aç", isOn: $reader)
             }
 
-            Section("Akışlar") {
+            Section {
                 Picker("Otomatik yenile", selection: $refreshMinutes) {
                     Text("15 dakikada bir").tag(15)
                     Text("30 dakikada bir").tag(30)
                     Text("Saatte bir").tag(60)
                     Text("3 saatte bir").tag(180)
                 }
+                Picker("Okunmuş yazıları sil", selection: $readRetention) { retentionOptions }
+                Picker("Kayıtlı kopyaları sil", selection: $copyRetention) { retentionOptions }
                 HStack {
                     Button("OPML İçe Aktar…", action: importOPML)
                     Button("OPML Dışa Aktar…", action: exportOPML)
                         .disabled(store.feeds.isEmpty)
                 }
+            } header: {
+                Text("Akışlar")
+            } footer: {
+                Text("Okunmamış yazılar hiç silinmez. Kayıtlı kopyalar, okuma modunda açılan yazıların çevrimdışı hâlleridir; Okunacaklar'daki, Yer İmleri'ndeki ve vurgu yaptığınız yazıların kopyaları silinmez. Temizlik akışlar yenilenince yapılır.")
+                    .foregroundStyle(.secondary)
             }
 
             Section {
@@ -56,6 +65,14 @@ struct SettingsView: View {
         .formStyle(.grouped)
         .frame(width: 460)
         .fixedSize(horizontal: false, vertical: true)
+    }
+
+    @ViewBuilder
+    private var retentionOptions: some View {
+        Text("7 gün sonra").tag(7)
+        Text("30 gün sonra").tag(30)
+        Text("90 gün sonra").tag(90)
+        Text("Hiçbir zaman").tag(0)
     }
 
     private func copyBookmarklet(_ action: String) {

@@ -48,6 +48,8 @@ struct FeedEntry: Identifiable, Codable, Hashable {
     var date: Date?
     var summary: String
     var isRead = false
+    /// When it was marked read; read entries are cleared out some days later.
+    var readDate: Date?
 }
 
 /// A passage the user marked on a page.

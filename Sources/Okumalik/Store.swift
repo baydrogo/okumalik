@@ -13,6 +13,8 @@ final class Store: ObservableObject {
     @Published var tagPrompt: TagTarget?
 
     private static let maxEntriesPerFeed = 200
+    /// Entries cleared out after being read; skipped while the site still lists them.
+    private var removedEntryIDs = Set<String>()
     private var loaded = false
     private var saveTask: Task<Void, Never>?
 
@@ -30,12 +32,14 @@ final class Store: ObservableObject {
         var feeds: [Feed]
         var entries: [FeedEntry]
         var highlights: [Highlight]
+        var removedEntries: [String]
 
-        init(items: [SavedItem], feeds: [Feed], entries: [FeedEntry], highlights: [Highlight]) {
+        init(items: [SavedItem], feeds: [Feed], entries: [FeedEntry], highlights: [Highlight], removedEntries: [String]) {
             self.items = items
             self.feeds = feeds
             self.entries = entries
             self.highlights = highlights
+            self.removedEntries = removedEntries
         }
 
         // Tolerates files written by older versions that lack newer keys.
@@ -45,6 +49,7 @@ final class Store: ObservableObject {
             feeds = try c.decodeIfPresent([Feed].self, forKey: .feeds) ?? []
             entries = try c.decodeIfPresent([FeedEntry].self, forKey: .entries) ?? []
             highlights = try c.decodeIfPresent([Highlight].self, forKey: .highlights) ?? []
+            removedEntries = try c.decodeIfPresent([String].self, forKey: .removedEntries) ?? []
         }
     }
 
@@ -59,6 +64,7 @@ final class Store: ObservableObject {
             try? await Task.sleep(for: .seconds(2))
             guard let self else { return }
             ArticleCache.shared.prefetch(self.items.filter { $0.kind == .readLater && !$0.isRead }.map(\.url))
+            self.cleanUp()
         }
     }
 
@@ -71,6 +77,7 @@ final class Store: ObservableObject {
             feeds = snapshot.feeds
             entries = snapshot.entries
             highlights = snapshot.highlights
+            removedEntryIDs = Set(snapshot.removedEntries)
         }
         loaded = true
     }
@@ -86,7 +93,8 @@ final class Store: ObservableObject {
     }
 
     func saveNow() {
-        let snapshot = Snapshot(items: items, feeds: feeds, entries: entries, highlights: highlights)
+        let snapshot = Snapshot(items: items, feeds: feeds, entries: entries, highlights: highlights,
+                                removedEntries: removedEntryIDs.sorted())
         guard let data = try? JSONEncoder.app.encode(snapshot) else { return }
         try? data.write(to: Self.dataURL, options: .atomic)
     }
@@ -256,6 +264,7 @@ final class Store: ObservableObject {
     func removeFeed(_ id: UUID) {
         feeds.removeAll { $0.id == id }
         entries.removeAll { $0.feedID == id }
+        removedEntryIDs = removedEntryIDs.filter { !$0.hasPrefix(id.uuidString + "|") }
     }
 
     func renameFeed(_ id: UUID, to title: String) {
@@ -279,6 +288,37 @@ final class Store: ObservableObject {
                 merge(result.entries, into: feeds[i])
             }
         }
+        cleanUp()
+    }
+
+    // MARK: Clean-up
+
+    /// Days after which read feed entries are removed (0: never). Shared with Settings.
+    static let readRetentionKey = "readRetentionDays"
+    /// Days after which offline copies not tied to saved links or highlights are removed (0: never).
+    static let copyRetentionKey = "copyRetentionDays"
+
+    private static func days(_ key: String) -> Int {
+        UserDefaults.standard.object(forKey: key) as? Int ?? 30
+    }
+
+    /// Removes long-read feed entries and stale offline copies, as set in Settings.
+    func cleanUp(now: Date = Date()) {
+        let readDays = Self.days(Self.readRetentionKey)
+        if readDays > 0 {
+            let cutoff = now.addingTimeInterval(-Double(readDays) * 86400)
+            let old = entries.filter { $0.isRead && ($0.readDate ?? $0.date ?? .distantPast) < cutoff }
+            if !old.isEmpty {
+                let ids = Set(old.map(\.id))
+                removedEntryIDs.formUnion(ids)
+                entries.removeAll { ids.contains($0.id) }
+            }
+        }
+        let copyDays = Self.days(Self.copyRetentionKey)
+        if copyDays > 0 {
+            let keep = Set(items.map(\.url) + highlights.map(\.url))
+            ArticleCache.shared.removeCopies(olderThan: now.addingTimeInterval(-Double(copyDays) * 86400), keeping: keep)
+        }
     }
 
     private func merge(_ parsed: [FeedParser.Entry], into feed: Feed) {
@@ -290,7 +330,7 @@ final class Store: ObservableObject {
         for p in parsed {
             guard let link = URL(string: p.link.trimmingCharacters(in: .whitespacesAndNewlines), relativeTo: base)?.absoluteURL else { continue }
             let id = feed.id.uuidString + "|" + (p.guid.isEmpty ? link.absoluteString : p.guid)
-            guard seen.insert(id).inserted else { continue }
+            guard seen.insert(id).inserted, !removedEntryIDs.contains(id) else { continue }
             let previous = old[id]
             merged.append(FeedEntry(
                 id: id,
@@ -299,23 +339,30 @@ final class Store: ObservableObject {
                 link: link,
                 date: p.date ?? previous?.date ?? now,
                 summary: p.summary,
-                isRead: previous?.isRead ?? false
+                isRead: previous?.isRead ?? false,
+                readDate: previous?.readDate
             ))
         }
         // Keep entries that have dropped out of the feed so history isn't lost.
         merged += old.values.filter { !seen.contains($0.id) }
         merged.sort { ($0.date ?? .distantPast) > ($1.date ?? .distantPast) }
         entries = entries.filter { $0.feedID != feed.id } + merged.prefix(Self.maxEntriesPerFeed)
+        // Forget removed entries once the site no longer lists them.
+        let prefix = feed.id.uuidString + "|"
+        removedEntryIDs = removedEntryIDs.filter { !$0.hasPrefix(prefix) || seen.contains($0) }
     }
 
     func setEntryRead(_ id: String, _ read: Bool) {
         guard let i = entries.firstIndex(where: { $0.id == id }), entries[i].isRead != read else { return }
         entries[i].isRead = read
+        entries[i].readDate = read ? Date() : nil
     }
 
     func markAllRead(feed: UUID?) {
+        let now = Date()
         for i in entries.indices where !entries[i].isRead && (feed == nil || entries[i].feedID == feed) {
             entries[i].isRead = true
+            entries[i].readDate = now
         }
     }
 
