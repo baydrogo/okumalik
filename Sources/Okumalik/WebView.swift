@@ -420,7 +420,7 @@ enum ReaderScript {
       },
       setStyle: function (o) {
         var r = document.documentElement.style;
-        ['bg', 'fg', 'muted', 'link', 'font', 'size', 'hl'].forEach(function (k) { r.setProperty('--okm-' + k, o[k]); });
+        ['bg', 'fg', 'muted', 'link', 'font', 'size', 'hl', 'sel'].forEach(function (k) { r.setProperty('--okm-' + k, o[k]); });
       },
       wrap: function (range, id) {
         var root = range.commonAncestorContainer, nodes = [];
@@ -619,7 +619,9 @@ enum ReaderScript {
     a{color:var(--okm-link);text-decoration-thickness:1px;text-underline-offset:2px}
     hr{border:0;border-top:1px solid var(--okm-muted);opacity:.3;margin:2.5em 0}
     table{border-collapse:collapse;font-size:.8em}td,th{border:1px solid rgba(127,127,127,.3);padding:4px 8px}
-    ::selection{background:rgba(176,72,51,.22)}
+    ::selection{background:transparent}
+    :is(p,li,dt,dd,h1,h2,h3,h4,h5,h6,blockquote,figcaption,pre,td,th)::selection,
+    :is(p,li,dt,dd,h1,h2,h3,h4,h5,h6,blockquote,figcaption,pre,td,th) *::selection{background:var(--okm-sel,rgba(0,122,255,.2))}
     """#
 
     /// Extracts the page's article as JSON (`ArticleInfo` with `content`), or null if there is none.

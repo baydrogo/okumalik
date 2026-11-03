@@ -85,6 +85,8 @@ struct ReaderStyle: Equatable {
             "bg": p.bg, "fg": p.fg, "muted": p.muted, "link": p.link,
             "font": font.css, "size": "\(size)px",
             "hl": p.dark ? "rgba(255, 196, 61, .30)" : "rgba(255, 210, 60, .55)",
+            // Text selection; only text blocks paint it (see ReaderScript.css).
+            "sel": p.dark ? "rgba(100, 160, 255, .32)" : "rgba(0, 122, 255, .20)",
         ]
     }
 
