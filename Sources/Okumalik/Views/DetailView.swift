@@ -136,10 +136,14 @@ struct DetailView: View {
                 .keyboardShortcut("e")
             }
             if case .entry(let entry) = subject {
-                Button { store.save(entry, as: .readLater) } label: {
-                    Label("Sonra Oku", systemImage: "tray.and.arrow.down")
+                let queued = store.queuedItem(for: entry.link) != nil
+                Button { store.toggleQueued(entry) } label: {
+                    Label(queued ? "Okunacaklarda" : "Okunacaklara Ekle",
+                          systemImage: queued ? "checkmark" : "tray.and.arrow.down")
+                        .labelStyle(.titleAndIcon)
                 }
-                .help("Okunacaklara ekle")
+                .help(queued ? "Okunacaklardan çıkar (⌘S)" : "Okunacaklara ekle (⌘S)")
+                .keyboardShortcut("s")
             }
 
             Button { Actions.open(subject.url) } label: {

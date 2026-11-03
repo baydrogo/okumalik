@@ -252,7 +252,7 @@ struct ItemListView: View {
                 if !entries.isEmpty {
                     Section {
                         ForEach(entries) { entry in
-                            EntryRow(entry: entry, feedTitle: store.feed(entry.feedID)?.title)
+                            EntryRow(entry: entry, feedTitle: store.feed(entry.feedID)?.title, queued: store.queuedItem(for: entry.link) != nil)
                                 .tag(DetailID.entry(entry.id))
                         }
                     } header: {
@@ -332,7 +332,8 @@ struct ItemListView: View {
         } else {
             List(selection: $selection) {
                 ForEach(list) { entry in
-                    EntryRow(entry: entry, feedTitle: section == .allFeeds ? store.feed(entry.feedID)?.title : nil)
+                    EntryRow(entry: entry, feedTitle: section == .allFeeds ? store.feed(entry.feedID)?.title : nil,
+                             queued: store.queuedItem(for: entry.link) != nil)
                         .tag(DetailID.entry(entry.id))
                 }
             }
@@ -394,7 +395,7 @@ struct ItemListView: View {
         Button("Bağlantıyı Kopyala") { Actions.copy(entry.link) }
         Divider()
         Button(entry.isRead ? "Okunmadı Olarak İşaretle" : "Okundu Olarak İşaretle") { store.setEntryRead(entry.id, !entry.isRead) }
-        Button("Sonra Oku") { store.save(entry, as: .readLater) }
+        Button(store.queuedItem(for: entry.link) != nil ? "Okunacaklardan Çıkar" : "Okunacaklara Ekle") { store.toggleQueued(entry) }
         Button("Yer İmi Olarak Kaydet") { store.save(entry, as: .bookmark) }
         Divider()
         TagMenu(target: .feed(entry.feedID), title: "Akışın Etiketleri")
@@ -513,6 +514,7 @@ struct SavedRow: View {
 struct EntryRow: View {
     let entry: FeedEntry
     let feedTitle: String?
+    var queued = false
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
@@ -536,6 +538,11 @@ struct EntryRow: View {
                         Text("·")
                     }
                     if let date = entry.date { Text(date, format: .relative(presentation: .named)) }
+                    if queued {
+                        Image(systemName: "tray.full")
+                            .foregroundStyle(Color.okmAccent.opacity(0.85))
+                            .help("Okunacaklarda")
+                    }
                 }
                 .font(.system(size: 11))
                 .foregroundStyle(.tertiary)

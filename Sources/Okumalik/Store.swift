@@ -319,6 +319,16 @@ final class Store: ObservableObject {
         }
     }
 
+    /// The unread reading-list item for this address, if it is queued.
+    func queuedItem(for url: URL) -> SavedItem? {
+        items.first { $0.kind == .readLater && !$0.isRead && $0.url == url }
+    }
+
+    /// Adds a feed entry to the reading list, or takes it off again if it is already there.
+    func toggleQueued(_ entry: FeedEntry) {
+        if let item = queuedItem(for: entry.link) { deleteItem(item.id) } else { save(entry, as: .readLater) }
+    }
+
     func save(_ entry: FeedEntry, as kind: ItemKind) {
         addLink(entry.link, kind: kind, tags: feed(entry.feedID)?.tags ?? [], title: entry.title, excerpt: entry.summary)
     }
