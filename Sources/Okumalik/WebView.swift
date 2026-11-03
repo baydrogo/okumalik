@@ -4,6 +4,9 @@ import WebKit
 /// Lets toolbar buttons and menu commands reach the web view that is on screen.
 final class ReaderProxy: ObservableObject {
     weak var coordinator: WebView.Coordinator?
+    /// True after following a link away from the article (or, outside reader mode, when there is history).
+    @Published var canGoBack = false
+    func goBack() { coordinator?.goBack() }
     func highlight() { coordinator?.highlightSelection() }
     func scroll(to id: UUID) { coordinator?.scroll(to: id) }
     func refetch() { coordinator?.refetch() }
@@ -177,6 +180,10 @@ struct WebView: NSViewRepresentable {
         /// Between finishing an extraction and the reader page starting to load.
         private var switching = false
         private var navigationCount = 0
+        /// A link inside the article was followed; "Geri" returns to the article.
+        private var away = false
+        private var articleScroll: Double?
+        private var pendingScroll: Double?
 
         init(parent: WebView) {
             self.parent = parent
@@ -187,6 +194,7 @@ struct WebView: NSViewRepresentable {
 
         /// Opens a page: from its offline copy in reader mode when there is one, otherwise live.
         func open(_ url: URL) {
+            setAway(false)
             if wantsReader, let info = ArticleCache.shared.article(for: url) {
                 show(info, for: url)
             } else {
@@ -278,7 +286,12 @@ struct WebView: NSViewRepresentable {
         private func pageReady() {
             applyStyle()
             restoreHighlights()
+            if let y = pendingScroll {
+                pendingScroll = nil
+                run("window.scrollTo(0, \(y)); true")
+            }
             reveal()
+            updateBack()
         }
 
         /// Shows the view only after the page has painted its new DOM; revealing straight away
@@ -346,6 +359,59 @@ struct WebView: NSViewRepresentable {
             if message.name == "okm" { return handlePopup(message.body) }
             guard !switching else { return }
             if wantsReader && !readerActive { applyReader() } else { pageReady() }
+        }
+
+        // MARK: Back
+
+        /// Returns to the article (in reader mode) or to the previous page.
+        func goBack() {
+            if wantsReader, away, let url = loadedURL {
+                pendingScroll = articleScroll
+                open(url)
+            } else {
+                webView?.goBack()
+            }
+        }
+
+        private func setAway(_ value: Bool) {
+            away = value
+            updateBack()
+        }
+
+        private func updateBack() {
+            let value = wantsReader ? away : (webView?.canGoBack ?? false)
+            // Published from outside SwiftUI's update pass.
+            DispatchQueue.main.async { [weak self] in
+                guard let proxy = self?.parent.proxy, proxy.canGoBack != value else { return }
+                proxy.canGoBack = value
+            }
+        }
+
+        func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction,
+                     decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
+            guard action.targetFrame?.isMainFrame == true, wantsReader else { return decisionHandler(.allow) }
+            switch action.navigationType {
+            case .backForward:
+                // Swiping back would land on the reader page as a plain page; reopen the article instead.
+                decisionHandler(.cancel)
+                if away { goBack() }
+            case .linkActivated:
+                let target = action.request.url.flatMap { URLComponents(url: $0, resolvingAgainstBaseURL: false) }
+                let current = webView.url.flatMap { URLComponents(url: $0, resolvingAgainstBaseURL: false) }
+                var a = target, b = current
+                a?.fragment = nil
+                b?.fragment = nil
+                // Footnotes and other in-page anchors stay on the article.
+                guard a != b else { return decisionHandler(.allow) }
+                if away { return decisionHandler(.allow) }
+                run("window.scrollY") { [weak self] y in
+                    self?.articleScroll = y as? Double
+                    self?.setAway(true)
+                    decisionHandler(.allow)
+                }
+            default:
+                decisionHandler(.allow)
+            }
         }
 
         /// Actions from the in-page selection popup and right-clicks.
@@ -576,8 +642,47 @@ enum ReaderScript {
           { icon: 'trash', label: 'Sil', danger: true, run: function () { self.post({ action: 'delete', id: id }); } }
         ]);
       },
+      // Pictures in the reader open enlarged over the article instead of replacing it.
+      imageLink: /\.(jpe?g|png|gif|webp|avif|svg)(\?|#|$)/i,
+      lightbox: function (src, fallback) {
+        this.hide();
+        var host = document.createElement('div');
+        host.style.cssText = 'all:initial;position:fixed;inset:0;z-index:2147483647';
+        var root = host.attachShadow({ mode: 'closed' });
+        root.innerHTML = '<style>' +
+          '.bg{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;' +
+          'background:rgba(18,16,14,.86);cursor:zoom-out}' +
+          'img{max-width:92vw;max-height:92vh;object-fit:contain;border-radius:4px;box-shadow:0 12px 48px rgba(0,0,0,.45)}' +
+          '</style><div class="bg"><img alt=""></div>';
+        var img = root.querySelector('img');
+        img.onerror = function () { if (fallback && img.src !== fallback) img.src = fallback; };
+        img.src = src;
+        var onKey = function (e) {
+          if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(); }
+        };
+        var close = function () { host.remove(); document.removeEventListener('keydown', onKey, true); };
+        host.addEventListener('click', function (e) { e.preventDefault(); e.stopPropagation(); close(); });
+        host.addEventListener('wheel', function (e) { e.preventDefault(); }, { passive: false });
+        document.addEventListener('keydown', onKey, true);
+        document.documentElement.appendChild(host);
+      },
+      onClick: function (e) {
+        if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || this.inPopup(e)) return;
+        var t = e.target && e.target.closest ? e.target : null;
+        if (!t || !t.closest('#okm')) return;
+        var sel = window.getSelection();
+        if (sel && !sel.isCollapsed) return;
+        var img = t.closest('img'), a = t.closest('a');
+        var linked = a && this.imageLink.test(a.getAttribute('href') || '') ? a.href : null;
+        if (!img && !linked) return;
+        e.preventDefault();
+        e.stopPropagation();
+        var shown = img ? (img.currentSrc || img.src) : null;
+        this.lightbox(linked || shown, shown);
+      },
       init: function () {
         var self = this;
+        document.addEventListener('click', function (e) { self.onClick(e); }, true);
         document.addEventListener('mousedown', function (e) { if (!self.inPopup(e)) self.hide(); }, true);
         document.addEventListener('mouseup', function (e) {
           if (e.button !== 0 || self.inPopup(e)) return;
@@ -612,6 +717,7 @@ enum ReaderScript {
     p{margin:0 0 1.1em}
     img,video,svg,figure,iframe{max-width:100%;height:auto}
     img{border-radius:3px}
+    #okm img{cursor:zoom-in}
     figure{margin:2em 0}figcaption{font-size:.75em;color:var(--okm-muted);margin-top:.5em}
     pre{overflow:auto;font-size:.75em;background:rgba(127,127,127,.1);padding:14px 16px;border-radius:6px}
     code{font-size:.85em}

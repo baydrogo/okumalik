@@ -99,6 +99,15 @@ struct DetailView: View {
 
     @ToolbarContentBuilder
     private func tools(_ subject: Subject) -> some ToolbarContent {
+        ToolbarItem(placement: .navigation) {
+            if proxy.canGoBack {
+                Button { proxy.goBack() } label: {
+                    Label("Geri", systemImage: "chevron.left")
+                }
+                .help("Yazıya geri dön (⌘[)")
+                .keyboardShortcut("[")
+            }
+        }
         ToolbarItemGroup(placement: .primaryAction) {
             Button { showTypography.toggle() } label: {
                 Label("Görünüm", systemImage: "textformat.size")
