@@ -61,10 +61,10 @@ enum ReaderTheme: String, CaseIterable, Identifiable {
     func palette(dark: Bool) -> Palette {
         switch self {
         case .auto: (dark ? ReaderTheme.night : .paper).palette(dark: dark)
-        case .paper: Palette(bg: "#F7F3EB", fg: "#2B2825", muted: "#8C857A", link: "#9A3B26", dark: false)
+        case .paper: Palette(bg: "#F7F3EB", fg: "#2B2825", muted: "#8C857A", link: "#2F5FAF", dark: false)
         case .white: Palette(bg: "#FFFFFF", fg: "#1D1D1F", muted: "#8A8A8E", link: "#2463C4", dark: false)
-        case .sepia: Palette(bg: "#F1E5CC", fg: "#4A3A28", muted: "#94806A", link: "#8A4B1F", dark: false)
-        case .night: Palette(bg: "#1C1B1A", fg: "#D9D4CC", muted: "#8A857D", link: "#E0A27A", dark: true)
+        case .sepia: Palette(bg: "#F1E5CC", fg: "#4A3A28", muted: "#94806A", link: "#36598F", dark: false)
+        case .night: Palette(bg: "#1C1B1A", fg: "#D9D4CC", muted: "#8A857D", link: "#8AB4F8", dark: true)
         }
     }
 }
@@ -115,11 +115,13 @@ extension NSColor {
 extension Color {
     init(hex: String) { self.init(nsColor: NSColor(hex: hex)) }
 
-    /// Muted brick red used for accents throughout the app.
-    static let okmAccent = Color(red: 0.69, green: 0.28, blue: 0.20)
+    /// Calm blue used for accents throughout the app.
+    static let okmAccent = Color(red: 0.18, green: 0.42, blue: 0.85)
 }
 
 extension Notification.Name {
     static let okmHighlight = Notification.Name("okmHighlight")
     static let okmFind = Notification.Name("okmFind")
+    static let okmPanel = Notification.Name("okmPanel")
+    static let okmFocus = Notification.Name("okmFocus")
 }

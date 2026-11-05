@@ -24,42 +24,58 @@ struct SiteIcon<Placeholder: View>: View {
     }
 }
 
-/// A link in Okunacaklar, Arşiv, the trash or a tag page.
+/// A link in Okunacaklar, Arşiv, the trash or a tag page: title, description and the
+/// "site · author · time" line, a cover picture on the right and a reading-progress line.
 struct SavedRow: View {
     @EnvironmentObject private var store: Store
     @ObservedObject private var cache = ArticleCache.shared
+    @AppStorage("compactList") private var compact = false
     let item: SavedItem
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(item.title)
-                .font(.system(size: 14, weight: .semibold))
-                .lineLimit(2)
-            if !item.excerpt.isEmpty {
-                Text(item.excerpt)
-                    .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
-            }
-            HStack(spacing: 6) {
-                Text(shortHost(item.url))
-                Text("·")
-                if let deleted = item.deletedAt {
-                    Text("silindi ") + Text(deleted, format: .relative(presentation: .named))
-                } else {
-                    Text(item.dateAdded, format: .relative(presentation: .named))
+        let article = cache.article(for: item.url)
+        HStack(alignment: .top, spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(item.title)
+                    .font(.system(size: 14, weight: .semibold))
+                    .lineLimit(compact ? 1 : 2)
+                if !compact, !item.excerpt.isEmpty {
+                    Text(item.excerpt)
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
                 }
-                if let minutes = cache.minutes(for: item.url) { Text("· \(minutes) dk") }
-                if let p = store.position(for: item.url), p > 0.03, p < 0.97 { Text("· %\(Int(p * 100))") }
-                ForEach(item.tags, id: \.self) { Text("#" + $0).foregroundStyle(Color.okmAccent.opacity(0.85)) }
-                Spacer(minLength: 0)
-                status
+                HStack(spacing: 5) {
+                    Text(byline(author: article?.author))
+                    ForEach(item.tags, id: \.self) { Text("#" + $0).foregroundStyle(Color.okmAccent.opacity(0.85)) }
+                    Spacer(minLength: 0)
+                    status
+                }
+                .font(.system(size: 11))
+                .foregroundStyle(.tertiary)
+                .lineLimit(1)
+                if let p = store.position(for: item.url), p > 0.03, item.deletedAt == nil {
+                    ProgressLine(value: p).padding(.top, 2)
+                }
             }
-            .font(.system(size: 11))
-            .foregroundStyle(.tertiary)
-            .lineLimit(1)
+            if !compact, let image = item.imageURL ?? article?.image.flatMap(URL.init(string:)) {
+                Cover(url: image)
+            }
         }
-        .padding(.vertical, 6)
+        .padding(.vertical, compact ? 3 : 6)
+    }
+
+    /// "site · author · 6 dk · 2 gün önce"
+    private func byline(author: String?) -> String {
+        var parts = [shortHost(item.url)]
+        if let author = (author ?? item.author).flatMap({ $0.isEmpty ? nil : $0 }), author != parts[0] { parts.append(author) }
+        if let minutes = cache.minutes(for: item.url) { parts.append("\(minutes) dk") }
+        if let deleted = item.deletedAt {
+            parts.append("silindi " + deleted.formatted(.relative(presentation: .named)))
+        } else {
+            parts.append(item.dateAdded.formatted(.relative(presentation: .named)))
+        }
+        return parts.joined(separator: " · ")
     }
 
     /// Whether the offline copy exists, for links on the reading list.
@@ -75,6 +91,39 @@ struct SavedRow: View {
                 Image(systemName: "arrow.down.circle").help("Çevrimdışı okunabilir")
             }
         }
+    }
+}
+
+/// How far an article has been read.
+struct ProgressLine: View {
+    let value: Double
+
+    var body: some View {
+        GeometryReader { g in
+            Capsule().fill(.quaternary)
+                .overlay(alignment: .leading) {
+                    Capsule().fill(Color.okmAccent.opacity(0.7)).frame(width: g.size.width * min(1, value))
+                }
+        }
+        .frame(height: 2)
+        .help("%\(Int(value * 100)) okundu")
+    }
+}
+
+/// A page's cover picture, cropped to a small square.
+struct Cover: View {
+    let url: URL
+
+    var body: some View {
+        AsyncImage(url: url) { phase in
+            if let image = phase.image {
+                image.resizable().scaledToFill()
+            } else {
+                Rectangle().fill(.quaternary.opacity(0.5))
+            }
+        }
+        .frame(width: 58, height: 58)
+        .clipShape(RoundedRectangle(cornerRadius: 6))
     }
 }
 
@@ -143,6 +192,7 @@ struct BookmarkRow: View {
 }
 
 struct EntryRow: View {
+    @AppStorage("compactList") private var compact = false
     let entry: FeedEntry
     let feedTitle: String?
     var queued = false
@@ -156,8 +206,8 @@ struct EntryRow: View {
                 Text(entry.title)
                     .font(.system(size: 14, weight: entry.isRead ? .regular : .semibold))
                     .foregroundStyle(entry.isRead ? .secondary : .primary)
-                    .lineLimit(2)
-                if !entry.summary.isEmpty {
+                    .lineLimit(compact ? 1 : 2)
+                if !compact, !entry.summary.isEmpty {
                     Text(entry.summary)
                         .font(.system(size: 12))
                         .foregroundStyle(.secondary)

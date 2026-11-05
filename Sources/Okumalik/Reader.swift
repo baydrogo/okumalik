@@ -147,7 +147,7 @@ enum ReaderScript {
           'box-shadow:0 8px 28px rgba(0,0,0,.28),0 0 0 .5px rgba(255,255,255,.1);' +
           'font:500 12.5px -apple-system,system-ui,sans-serif}' +
           'button{all:unset;display:flex;align-items:center;gap:6px;padding:5px 10px;border-radius:6px;color:#F4EFE6;white-space:nowrap}' +
-          'button:hover{background:rgba(255,255,255,.13)}button.danger:hover{background:#B04833}' +
+          'button:hover{background:rgba(255,255,255,.13)}button.danger:hover{background:#D64545}' +
           '.sep{width:1px;margin:5px 2px;background:rgba(255,255,255,.15)}' +
           'svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.4;stroke-linecap:round;stroke-linejoin:round}</style><div class="bar"></div>';
         // Keep the page selection when the toolbar is pressed.
@@ -275,6 +275,15 @@ enum ReaderScript {
         document.addEventListener('keydown', function () { self.hide(); }, true);
         window.addEventListener('scroll', function () { self.hide(); }, true);
         window.addEventListener('resize', function () { self.hide(); });
+        // Scroll direction, for hiding the floating tool bar while reading on.
+        var lastY = window.scrollY, lastDown = false;
+        window.addEventListener('scroll', function () {
+          var y = window.scrollY, dy = y - lastY;
+          if (Math.abs(dy) < 4) return;
+          lastY = y;
+          var down = dy > 0 && y > 80;
+          if (down !== lastDown) { lastDown = down; self.post({ action: 'direction', down: down }); }
+        }, { passive: true });
         // Reading progress in the reader page, reported once scrolling settles.
         var settle = null;
         window.addEventListener('scroll', function () {
@@ -291,7 +300,7 @@ enum ReaderScript {
     """#
 
     static let css = #"""
-    :root{--okm-bg:#F7F3EB;--okm-fg:#2B2825;--okm-muted:#8C857A;--okm-link:#9A3B26;--okm-font:ui-serif,"New York",Georgia,serif;--okm-size:19px}
+    :root{--okm-bg:#F7F3EB;--okm-fg:#2B2825;--okm-muted:#8C857A;--okm-link:#2F5FAF;--okm-font:ui-serif,"New York",Georgia,serif;--okm-size:19px}
     html,body{background:var(--okm-bg)}
     body{margin:0;color:var(--okm-fg);font-family:var(--okm-font);font-size:var(--okm-size);line-height:1.7;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
     #okm{max-width:36em;margin:0 auto;padding:64px 32px 140px}
@@ -334,7 +343,7 @@ enum ReaderScript {
             body = box;
             info = { url: location.href, title: r.title || document.title, site: r.site || host, author: r.author || '',
                      published: r.published || '', description: r.description || '',
-                     wordCount: r.wordCount || 0, markdown: r.contentMarkdown || '' };
+                     wordCount: r.wordCount || 0, image: r.image || '', markdown: r.contentMarkdown || '' };
             box.querySelectorAll('[style]').forEach(function(e){ e.removeAttribute('style'); });
           }
         }

@@ -24,17 +24,23 @@ enum PageInfo {
     struct Info {
         var title: String?
         var description: String?
+        var author: String?
+        var image: URL?
     }
 
     static func fetch(_ url: URL) async throws -> Info {
-        let (data, _) = try await Net.get(url)
+        let (data, finalURL) = try await Net.get(url)
         let html = String(HTMLTools.decode(data).prefix(300_000))
         let meta = HTMLTools.metaTags(in: html)
         let title = meta["og:title"] ?? meta["twitter:title"] ?? HTMLTools.firstMatch(#"<title[^>]*>([\s\S]*?)</title>"#, in: html)
         let description = meta["og:description"] ?? meta["description"] ?? meta["twitter:description"]
+        let author = meta["author"] ?? meta["article:author"] ?? meta["twitter:creator"]
+        let image = meta["og:image"] ?? meta["twitter:image"]
         return Info(
             title: title.map(HTMLTools.stripTags),
-            description: description.map { HTMLTools.excerpt($0) }
+            description: description.map { HTMLTools.excerpt($0) },
+            author: author.flatMap { $0.hasPrefix("http") ? nil : HTMLTools.stripTags($0) },
+            image: image.flatMap { URL(string: $0, relativeTo: finalURL)?.absoluteURL }
         )
     }
 }

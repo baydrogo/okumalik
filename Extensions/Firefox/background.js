@@ -16,7 +16,7 @@ async function send({ kind, url, title, tags, tabId }) {
     // Pages scripts can't run in (e.g. about: pages).
     await browser.tabs.update(tabId, { url: link });
   }
-  browser.browserAction.setBadgeBackgroundColor({ color: "#B04833", tabId });
+  browser.browserAction.setBadgeBackgroundColor({ color: "#2F6BD8", tabId });
   browser.browserAction.setBadgeText({ text: "✓", tabId });
   setTimeout(() => browser.browserAction.setBadgeText({ text: "", tabId }), 2000);
 }

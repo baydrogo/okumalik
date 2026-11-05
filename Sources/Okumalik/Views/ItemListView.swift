@@ -587,5 +587,5 @@ struct ItemListView: View {
 private extension SavedItem {
     /// Row identity that changes with the text, so the list re-measures the row when the
     /// title or description arrives after the link was added (otherwise it keeps the first height).
-    var rowKey: String { "\(id.uuidString)|\(title)|\(excerpt)" }
+    var rowKey: String { "\(id.uuidString)|\(title)|\(excerpt)|\(imageURL != nil)" }
 }

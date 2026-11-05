@@ -16,6 +16,9 @@ struct SavedItem: Identifiable, Codable, Hashable {
     var tags: [String] = []
     var dateAdded = Date()
     var note: String?
+    var author: String?
+    /// The page's cover picture (og:image), for the list.
+    var imageURL: URL?
     /// Set while the link is in the trash.
     var deletedAt: Date?
 }
@@ -85,6 +88,8 @@ struct ArticleInfo: Codable {
     var published: String?
     var description: String?
     var wordCount: Int?
+    /// Cover picture address.
+    var image: String?
     var markdown: String?
     /// Cleaned article HTML.
     var content: String?

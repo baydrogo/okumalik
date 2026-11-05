@@ -81,10 +81,19 @@ extension Store {
                              kind: kind, tags: Self.cleanTags(tags))
         items.insert(item, at: 0)
         if kind == .readLater { ArticleCache.shared.prefetch([url]) }
-        if title == nil || excerpt == nil {
-            Task { await fetchInfo(for: item.id, keepTitle: title != nil) }
-        }
+        // Description, author and cover picture come from the page itself.
+        Task { await fetchInfo(for: item.id, keepTitle: title != nil) }
         return other.map(AddResult.alsoIn) ?? .added
+    }
+
+    /// Once: author and cover picture for links saved before these were kept.
+    func backfillPageInfo() async {
+        let key = "pageInfoBackfilled"
+        guard !UserDefaults.standard.bool(forKey: key) else { return }
+        for item in items where item.imageURL == nil && item.author == nil {
+            await fetchInfo(for: item.id, keepTitle: true)
+        }
+        UserDefaults.standard.set(true, forKey: key)
     }
 
     private func fetchInfo(for id: UUID, keepTitle: Bool) async {
@@ -93,6 +102,8 @@ extension Store {
               let i = items.firstIndex(where: { $0.id == id }) else { return }
         if !keepTitle, let title = info.title, !title.isEmpty { items[i].title = title }
         if items[i].excerpt.isEmpty, let description = info.description { items[i].excerpt = description }
+        if items[i].author == nil { items[i].author = info.author }
+        if items[i].imageURL == nil { items[i].imageURL = info.image }
     }
 
     // MARK: Editing
@@ -131,7 +142,10 @@ extension Store {
         guard !moved.isEmpty else { return }
         items.removeAll { ids.contains($0.id) }
         trash.insert(contentsOf: moved.map { var item = $0; item.deletedAt = now; return item }, at: 0)
-        notify(moved.count == 1 ? "Çöp kutusuna taşındı" : "\(moved.count) bağlantı çöp kutusuna taşındı")
+        let ids = moved.map(\.id)
+        undoable(moved.count == 1 ? "Çöp kutusuna taşındı" : "\(moved.count) bağlantı çöp kutusuna taşındı", name: "Silme") { store in
+            ids.reversed().forEach(store.restoreItem)
+        }
     }
 
     func deleteItem(_ id: UUID) { deleteItems([id]) }
@@ -141,6 +155,7 @@ extension Store {
         var h = highlights.remove(at: i)
         h.deletedAt = Date()
         trashedHighlights.insert(h, at: 0)
+        undoable("Vurgu silindi", name: "Vurgu Silme") { $0.restoreHighlight(id) }
     }
 
     func restoreItem(_ id: UUID) {

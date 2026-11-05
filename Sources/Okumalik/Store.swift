@@ -15,8 +15,16 @@ final class Store: ObservableObject {
     @Published var showAddSheet = false
     /// Asks the window for a new tag name to add to these targets.
     @Published var tagPrompt: [TagTarget] = []
-    /// A short message shown at the bottom of the window.
-    @Published private(set) var toast: String?
+    /// A short message shown at the bottom of the window, optionally with "Geri Al".
+    @Published private(set) var toast: Toast?
+    /// The window's undo manager, so deletions can be undone with ⌘Z.
+    weak var undoManager: UndoManager?
+
+    struct Toast: Identifiable {
+        let id = UUID()
+        let text: String
+        let undo: (() -> Void)?
+    }
 
     /// Where reading stopped in each article (0…1), by address. Not published: it changes while scrolling.
     var positions: [String: Double] = [:] { didSet { scheduleSave() } }
@@ -83,6 +91,7 @@ final class Store: ObservableObject {
             guard let self else { return }
             ArticleCache.shared.prefetch(self.items.filter { $0.kind == .readLater && !$0.isRead }.map(\.url))
             self.cleanUp()
+            await self.backfillPageInfo()
         }
     }
 
@@ -174,13 +183,33 @@ final class Store: ObservableObject {
 
     // MARK: Messages
 
-    func notify(_ text: String) {
-        toast = text
+    func notify(_ text: String, undo: (() -> Void)? = nil) {
+        toast = Toast(text: text, undo: undo)
         toastTask?.cancel()
         toastTask = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(3))
+            try? await Task.sleep(for: .seconds(undo == nil ? 3 : 6))
             guard !Task.isCancelled else { return }
             self?.toast = nil
+        }
+    }
+
+    func dismissToast() {
+        toastTask?.cancel()
+        toast = nil
+    }
+
+    /// Records an undoable change for ⌘Z and offers "Geri Al" in the message.
+    func undoable(_ message: String, name: String, undo: @escaping (Store) -> Void) {
+        undoManager?.registerUndo(withTarget: self) { store in
+            undo(store)
+            store.dismissToast()
+        }
+        undoManager?.setActionName(name)
+        // The button restores directly; a later ⌘Z for the same change finds nothing left to restore.
+        notify(message) { [weak self] in
+            guard let self else { return }
+            undo(self)
+            self.dismissToast()
         }
     }
 

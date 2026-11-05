@@ -4,9 +4,6 @@ import WebKit
 /// Lets toolbar buttons and menu commands reach the web view that is on screen.
 final class ReaderProxy: ObservableObject {
     weak var coordinator: WebView.Coordinator?
-    /// True after following a link away from the article (or, outside reader mode, when there is history).
-    @Published var canGoBack = false
-    func goBack() { coordinator?.goBack() }
     func highlight() { coordinator?.highlightSelection() }
     func scroll(to id: UUID) { coordinator?.scroll(to: id) }
     func refetch() { coordinator?.refetch() }
@@ -103,6 +100,8 @@ struct WebView: NSViewRepresentable {
     let onHighlight: (UUID, String) -> Void
     let onDelete: (UUID) -> Void
     var onProgress: ((Double) -> Void)? = nil
+    /// Called when scrolling turns down (true) or up (false).
+    var onScrollDirection: ((Bool) -> Void)? = nil
 
     func makeCoordinator() -> Coordinator { Coordinator(parent: self) }
 
@@ -124,7 +123,6 @@ struct WebView: NSViewRepresentable {
         let webView = ReaderWebView(frame: .zero, configuration: config)
         webView.navigationDelegate = context.coordinator
         webView.uiDelegate = context.coordinator
-        webView.allowsBackForwardNavigationGestures = true
         webView.allowsMagnification = true
         webView.coordinator = context.coordinator
         context.coordinator.webView = webView
@@ -186,10 +184,6 @@ struct WebView: NSViewRepresentable {
         /// Between finishing an extraction and the reader page starting to load.
         private var switching = false
         private var navigationCount = 0
-        /// A link inside the article was followed; "Geri" returns to the article.
-        private var away = false
-        private var articleScroll: Double?
-        private var pendingScroll: Double?
         /// The saved reading position is applied once per reader page.
         private var positionRestored = false
 
@@ -202,7 +196,6 @@ struct WebView: NSViewRepresentable {
 
         /// Opens a page: from its offline copy in reader mode when there is one, otherwise live.
         func open(_ url: URL) {
-            setAway(false)
             if wantsReader, let info = ArticleCache.shared.article(for: url) {
                 show(info, for: url)
             } else {
@@ -290,11 +283,6 @@ struct WebView: NSViewRepresentable {
         private func pageReady() {
             applyStyle()
             restoreHighlights()
-            if let y = pendingScroll {
-                pendingScroll = nil
-                positionRestored = true
-                run("window.scrollTo(0, \(y)); true")
-            }
             if readerActive, !positionRestored {
                 positionRestored = true
                 if pendingFocus == nil, let p = parent.position, p > 0.02 {
@@ -302,7 +290,6 @@ struct WebView: NSViewRepresentable {
                 }
             }
             reveal()
-            updateBack()
         }
 
         /// Shows the view only after the page has painted its new DOM; revealing straight away
@@ -372,57 +359,20 @@ struct WebView: NSViewRepresentable {
             if wantsReader && !readerActive { applyReader() } else { pageReady() }
         }
 
-        // MARK: Back
+        // MARK: Links
 
-        /// Returns to the article (in reader mode) or to the previous page.
-        func goBack() {
-            if wantsReader, away, let url = loadedURL {
-                pendingScroll = articleScroll
-                open(url)
-            } else {
-                webView?.goBack()
-            }
-        }
-
-        private func setAway(_ value: Bool) {
-            away = value
-            updateBack()
-        }
-
-        private func updateBack() {
-            let value = wantsReader ? away : (webView?.canGoBack ?? false)
-            // Published from outside SwiftUI's update pass.
-            DispatchQueue.main.async { [weak self] in
-                guard let proxy = self?.parent.proxy, proxy.canGoBack != value else { return }
-                proxy.canGoBack = value
-            }
-        }
-
+        /// Links in the page open in the browser; footnotes and other anchors within the page stay here.
         func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction,
                      decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
-            guard action.targetFrame?.isMainFrame == true, wantsReader else { return decisionHandler(.allow) }
-            switch action.navigationType {
-            case .backForward:
-                // Swiping back would land on the reader page as a plain page; reopen the article instead.
-                decisionHandler(.cancel)
-                if away { goBack() }
-            case .linkActivated:
-                let target = action.request.url.flatMap { URLComponents(url: $0, resolvingAgainstBaseURL: false) }
-                let current = webView.url.flatMap { URLComponents(url: $0, resolvingAgainstBaseURL: false) }
-                var a = target, b = current
-                a?.fragment = nil
-                b?.fragment = nil
-                // Footnotes and other in-page anchors stay on the article.
-                guard a != b else { return decisionHandler(.allow) }
-                if away { return decisionHandler(.allow) }
-                run("window.scrollY") { [weak self] y in
-                    self?.articleScroll = y as? Double
-                    self?.setAway(true)
-                    decisionHandler(.allow)
-                }
-            default:
-                decisionHandler(.allow)
-            }
+            guard action.navigationType == .linkActivated, action.targetFrame?.isMainFrame != false,
+                  let target = action.request.url else { return decisionHandler(.allow) }
+            var a = URLComponents(url: target, resolvingAgainstBaseURL: false)
+            var b = webView.url.flatMap { URLComponents(url: $0, resolvingAgainstBaseURL: false) }
+            a?.fragment = nil
+            b?.fragment = nil
+            if a == b { return decisionHandler(.allow) }
+            decisionHandler(.cancel)
+            NSWorkspace.shared.open(target)
         }
 
         /// Actions from the in-page selection popup and right-clicks.
@@ -435,6 +385,8 @@ struct WebView: NSViewRepresentable {
             case "copyHighlight": id.map(copyHighlight)
             case "delete": id.map(deleteHighlight)
             case "context": menuHighlight = id
+            case "direction":
+                parent.onScrollDirection?((body["down"] as? Bool) ?? false)
             case "progress":
                 if readerActive, let value = body["value"] as? Double { parent.onProgress?(value) }
             default: break

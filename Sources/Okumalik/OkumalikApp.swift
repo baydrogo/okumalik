@@ -6,6 +6,7 @@ struct OkumalikApp: App {
     @StateObject private var store = Store()
     @AppStorage("readerMode") private var reader = true
     @AppStorage("readerSize") private var size = 19
+    @AppStorage("compactList") private var compact = false
 
     var body: some Scene {
         Window("Okumalık", id: "main") {
@@ -16,6 +17,16 @@ struct OkumalikApp: App {
         }
         .windowToolbarStyle(.unifiedCompact(showsTitle: false))
         .commands {
+            SidebarCommands()
+            CommandGroup(after: .sidebar) {
+                Button("Odak Modu") { NotificationCenter.default.post(name: .okmFocus, object: nil) }
+                    .keyboardShortcut("f", modifiers: [.command, .shift])
+                Button("Bilgi ve Vurgular Paneli") { NotificationCenter.default.post(name: .okmPanel, object: nil) }
+                    .keyboardShortcut("i", modifiers: [.command, .option])
+                Toggle("Sıkı Liste", isOn: $compact)
+                    .keyboardShortcut("l", modifiers: [.command, .option])
+                Divider()
+            }
             CommandGroup(replacing: .newItem) {
                 Button("Yeni Ekle…") { store.showAddSheet = true }
                     .keyboardShortcut("n")

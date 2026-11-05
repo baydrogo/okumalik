@@ -1,5 +1,6 @@
 import SwiftUI
 
+/// The reading pane: the page, a floating bar of tools over it and the side panel.
 struct DetailView: View {
     @EnvironmentObject private var store: Store
     @Environment(\.colorScheme) private var colorScheme
@@ -9,10 +10,12 @@ struct DetailView: View {
     @AppStorage("readerFont") private var font: ReaderFont = .newYork
     @AppStorage("readerSize") private var size = 19
     @AppStorage("readerTheme") private var theme: ReaderTheme = .auto
-    @AppStorage("showHighlights") private var showHighlights = false
+    @AppStorage("showPanel") private var showPanel = false
     @StateObject private var proxy = ReaderProxy()
     @State private var showTypography = false
     @State private var editing: UUID?
+    /// The floating bar hides while scrolling down and returns when scrolling up or pointing at it.
+    @State private var barVisible = true
     @State private var finding = false
     @State private var findText = ""
     @State private var findMissed = false
@@ -74,12 +77,16 @@ struct DetailView: View {
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .okmHighlight)) { _ in proxy.highlight() }
+        .onReceive(NotificationCenter.default.publisher(for: .okmPanel)) { _ in showPanel.toggle() }
         .onReceive(NotificationCenter.default.publisher(for: .okmFind)) { _ in
             guard subject != nil else { return }
             finding = true
             findFocused = true
         }
-        .onChange(of: selection) { finding = false }
+        .onChange(of: selection) {
+            finding = false
+            barVisible = true
+        }
         .sheet(item: Binding(get: { editing.map(EditID.init) }, set: { editing = $0?.id })) { ItemEditSheet(id: $0.id) }
     }
 
@@ -90,6 +97,10 @@ struct DetailView: View {
         let title = subject.title
         var focus: UUID?
         if case .highlight(let h) = subject { focus = h.id }
+        var item: SavedItem?
+        if case .item(let i) = subject { item = i }
+        var entry: FeedEntry?
+        if case .entry(let e) = subject { entry = e }
 
         return WebView(
             url: url,
@@ -105,80 +116,86 @@ struct DetailView: View {
             store.deleteHighlight(id)
         } onProgress: { value in
             store.setPosition(value, for: url)
+        } onScrollDirection: { down in
+            withAnimation(.easeOut(duration: 0.2)) { barVisible = !down }
         }
         .background(Color(nsColor: reader ? style.backgroundColor : .textBackgroundColor))
-        .overlay(alignment: .top) { if finding { findBar } }
-        .inspector(isPresented: $showHighlights) {
-            HighlightsPanel(url: url, title: title, proxy: proxy)
-                .inspectorColumnWidth(min: 220, ideal: 270, max: 380)
+        .overlay(alignment: .topTrailing) { floatingBar(subject) }
+        .overlay(alignment: .top) {
+            // While the bar is hidden, pointing at the top edge brings it back.
+            if !barVisible {
+                Color.clear.frame(height: 44).contentShape(Rectangle())
+                    .onHover { if $0 { withAnimation(.easeOut(duration: 0.2)) { barVisible = true } } }
+            }
         }
-        .toolbar { tools(subject) }
+        .overlay(alignment: .top) { if finding { findBar } }
+        .inspector(isPresented: $showPanel) {
+            SidePanel(url: url, title: title, item: item, entry: entry, proxy: proxy)
+                .inspectorColumnWidth(min: 240, ideal: 290, max: 400)
+        }
     }
 
-    @ToolbarContentBuilder
-    private func tools(_ subject: Subject) -> some ToolbarContent {
-        ToolbarItem(placement: .navigation) {
-            if proxy.canGoBack {
-                Button { proxy.goBack() } label: {
-                    Label("Geri", systemImage: "chevron.left")
+    // MARK: Floating bar
+
+    private func floatingBar(_ subject: Subject) -> some View {
+        HStack(spacing: 2) {
+            barButton("textformat.size", "Yazı tipi, boyut ve arka plan") { showTypography.toggle() }
+                .popover(isPresented: $showTypography, arrowEdge: .bottom) {
+                    TypographyPanel(reader: $reader, font: $font, size: $size, theme: $theme)
                 }
-                .help("Yazıya geri dön (⌘[)")
-                .keyboardShortcut("[")
-            }
-        }
-        ToolbarItemGroup(placement: .primaryAction) {
-            Button { showTypography.toggle() } label: {
-                Label("Görünüm", systemImage: "textformat.size")
-            }
-            .help("Yazı tipi, boyut ve arka plan")
-            .popover(isPresented: $showTypography, arrowEdge: .bottom) {
-                TypographyPanel(reader: $reader, font: $font, size: $size, theme: $theme)
-            }
-
-            Button { proxy.highlight() } label: {
-                Label("Vurgula", systemImage: "highlighter")
-            }
-            .help("Seçili metni vurgula (⇧⌘H)")
-
-            Button { showHighlights.toggle() } label: {
-                Label("Vurgular", systemImage: "text.quote")
-            }
-            .help("Bu sayfanın vurguları")
+            barButton("highlighter", "Seçili metni vurgula (⇧⌘H)") { proxy.highlight() }
+            barButton("sidebar.right", "Bilgi ve vurgular (⌥⌘I)") { showPanel.toggle() }
 
             if case .item(let item) = subject, item.kind == .readLater {
-                Button { store.setRead(item.id, !item.isRead) } label: {
-                    Label(item.isRead ? "Okunacaklara Geri Al" : "Arşivle",
-                          systemImage: item.isRead ? "tray.and.arrow.up" : "archivebox")
+                barButton(item.isRead ? "tray.and.arrow.up" : "archivebox",
+                          item.isRead ? "Okunacaklara geri al (⌘E)" : "Arşivle (⌘E)") {
+                    store.setRead(item.id, !item.isRead)
                 }
-                .help(item.isRead ? "Okunacaklara geri al" : "Arşivle (⌘E)")
                 .keyboardShortcut("e")
             }
             if case .entry(let entry) = subject {
                 let queued = store.queuedItem(for: entry.link) != nil
-                Button { store.toggleQueued(entry) } label: {
-                    Label(queued ? "Okunacaklarda" : "Okunacaklara Ekle",
-                          systemImage: queued ? "checkmark" : "tray.and.arrow.down")
-                        .labelStyle(.titleAndIcon)
+                barButton(queued ? "checkmark.circle.fill" : "tray.and.arrow.down",
+                          queued ? "Okunacaklarda; çıkarmak için tıklayın (⌘S)" : "Okunacaklara ekle (⌘S)") {
+                    store.toggleQueued(entry)
                 }
-                .help(queued ? "Okunacaklardan çıkar (⌘S)" : "Okunacaklara ekle (⌘S)")
+                .foregroundStyle(queued ? Color.okmAccent : .secondary)
                 .keyboardShortcut("s")
             }
-
-            Button { Actions.open(subject.url) } label: {
-                Label("Tarayıcıda Aç", systemImage: "safari")
-            }
-            .help("Varsayılan tarayıcıda aç (⌘O)")
-            .keyboardShortcut("o")
+            barButton("safari", "Tarayıcıda aç (⌘O)") { Actions.open(subject.url) }
+                .keyboardShortcut("o")
 
             Menu {
                 moreMenu(subject)
             } label: {
-                Label("Diğer", systemImage: "ellipsis")
+                Image(systemName: "ellipsis").frame(width: 28, height: 26).contentShape(Rectangle())
             }
+            .menuStyle(.borderlessButton)
             .menuIndicator(.hidden)
+            .fixedSize()
             .help("Diğer")
         }
+        .font(.system(size: 13))
+        .foregroundStyle(.secondary)
+        .buttonStyle(.plain)
+        .padding(.horizontal, 6)
+        .padding(.vertical, 3)
+        .background(.regularMaterial, in: Capsule())
+        .overlay(Capsule().strokeBorder(.primary.opacity(0.06)))
+        .shadow(color: .black.opacity(0.08), radius: 8, y: 2)
+        .padding(12)
+        .opacity(barVisible || showTypography ? 1 : 0)
+        .allowsHitTesting(barVisible || showTypography)
     }
+
+    private func barButton(_ symbol: String, _ help: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol).frame(width: 28, height: 26).contentShape(Rectangle())
+        }
+        .help(help)
+    }
+
+    // MARK: Find
 
     /// ⌘F: find in the page; ↩ or ⌘G for the next match, ⇧⌘G for the previous one.
     private var findBar: some View {
@@ -208,6 +225,8 @@ struct DetailView: View {
     private func find(backwards: Bool) {
         proxy.find(findText, backwards: backwards) { found in findMissed = !found && !findText.isEmpty }
     }
+
+    // MARK: More menu
 
     @ViewBuilder
     private func moreMenu(_ subject: Subject) -> some View {

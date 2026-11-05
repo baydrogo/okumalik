@@ -8,6 +8,7 @@ struct SettingsView: View {
     @AppStorage(Store.readRetentionKey) private var readRetention = 30
     @AppStorage(Store.copyRetentionKey) private var copyRetention = 30
     @AppStorage(Store.obsidianFolderKey) private var obsidianFolder = ""
+    @AppStorage("compactList") private var compact = false
     @State private var status: String?
     @State private var pendingRestore: Store.Snapshot?
 
@@ -18,87 +19,98 @@ struct SettingsView: View {
     ]
 
     var body: some View {
-        Form {
-            Section("Okuma") {
-                Toggle("Sayfaları okuma modunda aç", isOn: $reader)
-            }
-
-            Section {
-                Picker("Otomatik yenile", selection: $refreshMinutes) {
-                    Text("15 dakikada bir").tag(15)
-                    Text("30 dakikada bir").tag(30)
-                    Text("Saatte bir").tag(60)
-                    Text("3 saatte bir").tag(180)
+        TabView {
+            tab {
+                Section("Okuma") {
+                    Toggle("Sayfaları okuma modunda aç", isOn: $reader)
                 }
-                Picker("Okunmuş yazıları sil", selection: $readRetention) { retentionOptions }
-                Picker("Kayıtlı kopyaları sil", selection: $copyRetention) { retentionOptions }
-                HStack {
-                    Button("OPML İçe Aktar…", action: importOPML)
-                    Button("OPML Dışa Aktar…", action: exportOPML)
-                        .disabled(store.feeds.isEmpty)
+                Section("Liste") {
+                    Toggle("Sıkı liste (tek satır, görselsiz)", isOn: $compact)
                 }
-            } header: {
-                Text("Akışlar")
-            } footer: {
-                Text("Okunmamış yazılar hiç silinmez. Kayıtlı kopyalar, okuma modunda açılan yazıların çevrimdışı hâlleridir; Okunacaklar'daki, Yer İmleri'ndeki ve vurgu yaptığınız yazıların kopyaları silinmez. Temizlik akışlar yenilenince yapılır.")
-                    .foregroundStyle(.secondary)
             }
+            .tabItem { Label("Genel", systemImage: "gearshape") }
 
-            Section {
-                ForEach(Self.bookmarklets, id: \.1) { name, action in
-                    LabeledContent(name) {
-                        Button("Kopyala") { copyBookmarklet(action) }
+            tab {
+                Section {
+                    Picker("Otomatik yenile", selection: $refreshMinutes) {
+                        Text("15 dakikada bir").tag(15)
+                        Text("30 dakikada bir").tag(30)
+                        Text("Saatte bir").tag(60)
+                        Text("3 saatte bir").tag(180)
                     }
-                }
-            } header: {
-                Text("Tarayıcıdan kaydet")
-            } footer: {
-                Text("Kopyaladığınız kodu tarayıcınızda yeni bir yer imi oluşturup adres alanına yapıştırın. O yer imine tıkladığınızda açık sayfa Okumalık'a eklenir.")
-                    .foregroundStyle(.secondary)
-            }
-
-            Section {
-                LabeledContent("Klasör") {
-                    Text(obsidianFolder.isEmpty ? "Seçilmedi" : (obsidianFolder as NSString).abbreviatingWithTildeInPath)
+                    Picker("Okunmuş yazıları sil", selection: $readRetention) { retentionOptions }
+                    Picker("Kayıtlı kopyaları sil", selection: $copyRetention) { retentionOptions }
+                    HStack {
+                        Button("OPML İçe Aktar…", action: importOPML)
+                        Button("OPML Dışa Aktar…", action: exportOPML)
+                            .disabled(store.feeds.isEmpty)
+                    }
+                } header: {
+                    Text("Akışlar")
+                } footer: {
+                    Text("Okunmamış yazılar hiç silinmez. Kayıtlı kopyalar, okuma modunda açılan yazıların çevrimdışı hâlleridir; Okunacaklar'daki, Yer İmleri'ndeki ve vurgu yaptığınız yazıların kopyaları silinmez. Temizlik akışlar yenilenince yapılır.")
                         .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
                 }
-                HStack {
-                    Button("Seç…", action: chooseObsidianFolder)
-                    if !obsidianFolder.isEmpty { Button("Kaldır") { obsidianFolder = "" } }
-                }
-            } header: {
-                Text("Obsidian")
-            } footer: {
-                Text("Okurken \"…\" menüsündeki \"Obsidian'a Gönder\", yazıyı notunuz ve vurgularınızla birlikte bu klasöre Markdown notu olarak kaydeder.")
-                    .foregroundStyle(.secondary)
             }
+            .tabItem { Label("Akışlar", systemImage: "dot.radiowaves.up.forward") }
 
-            Section {
-                HStack {
-                    Button("Yedeği Dışa Aktar…", action: exportLibrary)
-                    Button("Yedekten Geri Yükle…", action: chooseBackup)
+            tab {
+                Section {
+                    ForEach(Self.bookmarklets, id: \.1) { name, action in
+                        LabeledContent(name) {
+                            Button("Kopyala") { copyBookmarklet(action) }
+                        }
+                    }
+                } header: {
+                    Text("Tarayıcıdan kaydet")
+                } footer: {
+                    Text("Kopyaladığınız kodu tarayıcınızda yeni bir yer imi oluşturup adres alanına yapıştırın. O yer imine tıkladığınızda açık sayfa Okumalık'a eklenir.")
+                        .foregroundStyle(.secondary)
                 }
-                HStack {
-                    Button("Yer İmlerini İçe Aktar…", action: importBookmarks)
-                    Button("Yer İmlerini Dışa Aktar…", action: exportBookmarks)
+
+                Section {
+                    LabeledContent("Klasör") {
+                        Text(obsidianFolder.isEmpty ? "Seçilmedi" : (obsidianFolder as NSString).abbreviatingWithTildeInPath)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
+                    HStack {
+                        Button("Seç…", action: chooseObsidianFolder)
+                        if !obsidianFolder.isEmpty { Button("Kaldır") { obsidianFolder = "" } }
+                    }
+                } header: {
+                    Text("Obsidian")
+                } footer: {
+                    Text("Okurken \"…\" menüsündeki \"Obsidian'a Gönder\", yazıyı notunuz ve vurgularınızla birlikte bu klasöre Markdown notu olarak kaydeder.")
+                        .foregroundStyle(.secondary)
                 }
-                HStack {
-                    Button("Veri Klasörünü Göster") { NSWorkspace.shared.open(Store.dataDirectory) }
-                    Button("Otomatik Yedekler") { NSWorkspace.shared.open(Store.backupDirectory) }
-                }
-                if let status {
-                    Text(status).foregroundStyle(.secondary)
-                }
-            } header: {
-                Text("Veri")
-            } footer: {
-                Text("Kitaplık her gün kendiliğinden yedeklenir; son 10 günün yedeği tutulur. Yer imleri Firefox, Chrome, Safari ya da Linkding'in HTML biçimiyle aktarılır.")
-                    .foregroundStyle(.secondary)
             }
+            .tabItem { Label("Kaydetme", systemImage: "square.and.arrow.down") }
+
+            tab {
+                Section {
+                    HStack {
+                        Button("Yedeği Dışa Aktar…", action: exportLibrary)
+                        Button("Yedekten Geri Yükle…", action: chooseBackup)
+                    }
+                    HStack {
+                        Button("Yer İmlerini İçe Aktar…", action: importBookmarks)
+                        Button("Yer İmlerini Dışa Aktar…", action: exportBookmarks)
+                    }
+                    HStack {
+                        Button("Veri Klasörünü Göster") { NSWorkspace.shared.open(Store.dataDirectory) }
+                        Button("Otomatik Yedekler") { NSWorkspace.shared.open(Store.backupDirectory) }
+                    }
+                } header: {
+                    Text("Veri")
+                } footer: {
+                    Text("Kitaplık her gün kendiliğinden yedeklenir; son 10 günün yedeği tutulur. Yer imleri Firefox, Chrome, Safari ya da Linkding'in HTML biçimiyle aktarılır.")
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .tabItem { Label("Veri", systemImage: "externaldrive") }
         }
-        .formStyle(.grouped)
         .alert("Yedek geri yüklensin mi?", isPresented: restoreAlert) {
             Button("Geri Yükle", role: .destructive) {
                 if let backup = pendingRestore { store.restoreLibrary(backup) }
@@ -110,7 +122,18 @@ struct SettingsView: View {
                 Text("Yedekte \(b.items.count) bağlantı, \(b.feeds.count) akış ve \(b.highlights.count) vurgu var. Şimdiki kitaplık bunlarla değiştirilecek; değiştirilmeden önce otomatik yedeklerin arasına kaydedilir.")
             }
         }
-        .frame(width: 460)
+        .frame(width: 500)
+    }
+
+    /// One settings tab: a grouped form sized to its content, with the last action's result below.
+    private func tab<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+        Form {
+            content()
+            if let status {
+                Text(status).foregroundStyle(.secondary)
+            }
+        }
+        .formStyle(.grouped)
         .fixedSize(horizontal: false, vertical: true)
     }
 

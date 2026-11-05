@@ -48,7 +48,7 @@ CTLineDraw(line, cg)
 
 let dotX = originX + ink.maxX + gap
 let dotY = originY + ink.minY
-color(0xB04833).setFill()
+color(0x2F6BD8).setFill()
 NSBezierPath(ovalIn: NSRect(x: dotX, y: dotY, width: dotR * 2, height: dotR * 2)).fill()
 
 NSGraphicsContext.restoreGraphicsState()

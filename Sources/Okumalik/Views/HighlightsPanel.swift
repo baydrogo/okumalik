@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Inspector listing the highlights of the page on screen.
+/// The side panel's "Vurgular" tab: the highlights of the page on screen.
 struct HighlightsPanel: View {
     @EnvironmentObject private var store: Store
     let url: URL
@@ -12,17 +12,6 @@ struct HighlightsPanel: View {
     var body: some View {
         let list = store.highlights(for: url)
         VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .firstTextBaseline) {
-                Text("Vurgular").font(.system(size: 15, weight: .semibold, design: .serif))
-                Spacer()
-                if !list.isEmpty {
-                    Text("\(list.count)").font(.caption).foregroundStyle(.secondary)
-                }
-            }
-            .padding(.horizontal, 16)
-            .padding(.top, 14)
-            .padding(.bottom, 10)
-
             if list.isEmpty {
                 Spacer()
                 Text("Metni seçip ⇧⌘H’ye basın ya da sağ tıklayıp “Vurgula”yı seçin.")
@@ -53,8 +42,7 @@ struct HighlightsPanel: View {
                                 }
                         }
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 16)
+                    .padding(16)
                 }
                 Divider()
                 HStack {

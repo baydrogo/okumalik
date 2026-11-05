@@ -14,8 +14,10 @@ Xcode gerekmez; Command Line Tools yeterli.
 ## Özellikler
 
 **Okuma**
-- **Okunacaklar / Arşiv** — bağlantı ekle, okuyunca arşivle (⌘E). Sağ üstteki menüden sıralama (en yeni, en eski, en kısa) ve okuma süresi süzgeci. Satırda okuma süresi, kaldığınız yer (%) ve çevrimdışı kopya durumu görünür; kopya alınamadıysa işarete tıklayıp yeniden deneyin.
-- **Okuma modu** (⇧⌘L) — yazıyı [Defuddle](https://github.com/kepano/defuddle) ile ayıklar; yazar, tarih ve okuma süresini gösterir. "Aa" menüsünden yazı tipi, boyut (⌘+ / ⌘−) ve arka plan. Yazıyı tekrar açınca kaldığınız yerden devam eder. ⌘F ile sayfada bul. Fotoğraflar yazının üstünde büyütülür; yazıdaki bir bağlantıya gidince "Geri" (⌘[) yazıya döndürür.
+- **Okunacaklar / Arşiv** — bağlantı ekle, okuyunca arşivle (⌘E). Satırda kapak görseli, "site · yazar · süre", okunma çizgisi ve çevrimdışı kopya durumu; kopya alınamadıysa işarete tıklayıp yeniden deneyin. Sağ üstteki menüden sıralama ve okuma süresi süzgeci; Görünüm > Sıkı Liste (⌥⌘L) tek satırlık görünüm.
+- **Okuma modu** (⇧⌘L) — yazıyı [Defuddle](https://github.com/kepano/defuddle) ile ayıklar; yazar, tarih ve okuma süresini gösterir. Araçlar yazının üstünde sade bir şeritte durur, aşağı kaydırınca gizlenir. "Aa" ile yazı tipi, boyut (⌘+ / ⌘−) ve arka plan. Yazıyı tekrar açınca kaldığınız yerden devam eder. ⌘F ile sayfada bul. Yazıdaki bağlantılar tarayıcıda açılır; fotoğraflar yazının üstünde büyütülür.
+- **Yan panel** (⌥⌘I) — **Bilgi** sekmesinde site, yazar, yayın tarihi, uzunluk, okunan kısım, eklenme tarihi, adres, etiketler ve not; **Vurgular** sekmesinde sayfanın vurguları.
+- **Sütunlar** — kenar çubuğu ⌃⌘S ile gizlenir; Odak Modu (⇧⌘F) yalnızca yazıyı bırakır.
 - **Çevrimdışı kopya** — Okunacaklar'a eklenen ve okuma modunda açılan yazılar saklanır, anında ve internetsiz açılır. Yazı sitede değiştiyse "…" > "Yazıyı Siteden Yeniden Al".
 - **Vurgular ve notlar** — metni seçince beliren araç çubuğundan "Vurgula" (ya da ⇧⌘H). Vurguya tıklayınca ya da sağ tıklayınca kopyalanır, silinir; sağdaki panelden vurguya not eklenir. Bağlantılara "Düzenle…" ile not yazılır.
 - **Dışa aktarma** — yazının tamamı (başlık bilgileri, not ve vurgularla) ya da yalnızca vurgular Markdown olarak kopyalanır veya kaydedilir. Ayarlar'da Obsidian klasörü seçilirse "…" > "Obsidian'a Gönder" notu doğrudan kasaya yazar.
@@ -26,7 +28,7 @@ Xcode gerekmez; Command Line Tools yeterli.
 - **Yinelenen kontrolü** — aynı sayfa (izleme parametreleri, `www.` ve sondaki `/` yok sayılarak) bir listeye ikinci kez eklenmez, başa taşınır; ekleme penceresi ve bildirim bunu söyler.
 - **Çoklu seçim** — ⌘ ya da ⇧ ile birden fazla satır seçip arşivleme, etiketleme, okundu sayma ya da silme.
 - **Arama** — başlık, adres, açıklama, etiket, not, vurgu ve kayıtlı yazının tam metninde.
-- **Çöp Kutusu** — silinen bağlantılar ve vurgular 30 gün burada kalır; geri yüklenebilir.
+- **Çöp Kutusu ve geri alma** — silince alttaki bildirimde "Geri Al" ya da ⌘Z; silinenler ayrıca 30 gün Çöp Kutusu'nda kalır.
 
 **Akışlar**
 - RSS 2.0, RSS 1.0, Atom ve JSON Feed. Site adresi vermek yeterli, akış otomatik bulunur. Değişmeyen akışlar yeniden indirilmez (ETag / Last-Modified).

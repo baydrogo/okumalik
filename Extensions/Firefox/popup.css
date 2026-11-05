@@ -1,11 +1,11 @@
 :root {
   --bg: #FBF8F1; --fg: #24211D; --muted: #8C857A; --line: rgba(36, 33, 29, .12);
-  --field: #FFFFFF; --accent: #B04833; --chip: rgba(36, 33, 29, .06);
+  --field: #FFFFFF; --accent: #2F6BD8; --chip: rgba(36, 33, 29, .06);
   color-scheme: light dark;
 }
 @media (prefers-color-scheme: dark) {
   :root { --bg: #1F1D1A; --fg: #EDE7DC; --muted: #9A9286; --line: rgba(237, 231, 220, .14);
-          --field: #2A2723; --accent: #C8634D; --chip: rgba(237, 231, 220, .08); }
+          --field: #2A2723; --accent: #6A9BF0; --chip: rgba(237, 231, 220, .08); }
 }
 * { box-sizing: border-box; }
 body { margin: 0; width: 320px; background: var(--bg); color: var(--fg);
