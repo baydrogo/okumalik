@@ -12,6 +12,11 @@ struct DetailView: View {
     @AppStorage("showHighlights") private var showHighlights = false
     @StateObject private var proxy = ReaderProxy()
     @State private var showTypography = false
+    @State private var editing: UUID?
+    @State private var finding = false
+    @State private var findText = ""
+    @State private var findMissed = false
+    @FocusState private var findFocused: Bool
 
     private enum Subject {
         case item(SavedItem)
@@ -69,7 +74,16 @@ struct DetailView: View {
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .okmHighlight)) { _ in proxy.highlight() }
+        .onReceive(NotificationCenter.default.publisher(for: .okmFind)) { _ in
+            guard subject != nil else { return }
+            finding = true
+            findFocused = true
+        }
+        .onChange(of: selection) { finding = false }
+        .sheet(item: Binding(get: { editing.map(EditID.init) }, set: { editing = $0?.id })) { ItemEditSheet(id: $0.id) }
     }
+
+    private struct EditID: Identifiable { let id: UUID }
 
     private func page(_ subject: Subject) -> some View {
         let url = subject.url
@@ -83,13 +97,17 @@ struct DetailView: View {
             style: style,
             highlights: store.highlights(for: url),
             focus: focus,
-            proxy: proxy
+            proxy: proxy,
+            position: store.position(for: url)
         ) { id, text in
             store.addHighlight(id: id, url: url, title: title, text: text)
         } onDelete: { id in
             store.deleteHighlight(id)
+        } onProgress: { value in
+            store.setPosition(value, for: url)
         }
         .background(Color(nsColor: reader ? style.backgroundColor : .textBackgroundColor))
+        .overlay(alignment: .top) { if finding { findBar } }
         .inspector(isPresented: $showHighlights) {
             HighlightsPanel(url: url, title: title, proxy: proxy)
                 .inspectorColumnWidth(min: 220, ideal: 270, max: 380)
@@ -162,10 +180,40 @@ struct DetailView: View {
         }
     }
 
+    /// ⌘F: find in the page; ↩ or ⌘G for the next match, ⇧⌘G for the previous one.
+    private var findBar: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+            TextField("Sayfada bul", text: $findText)
+                .textFieldStyle(.plain)
+                .frame(width: 200)
+                .focused($findFocused)
+                .onSubmit { find(backwards: false) }
+            if findMissed { Text("Bulunamadı").font(.caption).foregroundStyle(.secondary) }
+            Button { find(backwards: true) } label: { Image(systemName: "chevron.up") }
+                .keyboardShortcut("g", modifiers: [.command, .shift])
+            Button { find(backwards: false) } label: { Image(systemName: "chevron.down") }
+                .keyboardShortcut("g")
+            Button { finding = false } label: { Image(systemName: "xmark") }
+                .keyboardShortcut(.cancelAction)
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 7)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 9))
+        .shadow(color: .black.opacity(0.1), radius: 8, y: 2)
+        .padding(10)
+    }
+
+    private func find(backwards: Bool) {
+        proxy.find(findText, backwards: backwards) { found in findMissed = !found && !findText.isEmpty }
+    }
+
     @ViewBuilder
     private func moreMenu(_ subject: Subject) -> some View {
         switch subject {
         case .item(let item):
+            Button("Düzenle ve Not Ekle…") { editing = item.id }
             if item.kind == .readLater {
                 Button("Yer İmlerine Taşı") { store.setKind(item.id, .bookmark) }
             } else {
@@ -180,6 +228,16 @@ struct DetailView: View {
         Divider()
         Button("Yazıyı Markdown Olarak Kopyala") { withArticle(subject) { Actions.copyText($0) } }
         Button("Yazıyı Markdown Olarak Dışa Aktar…") { withArticle(subject) { Actions.saveMarkdown($0, name: subject.title) } }
+        Button("Obsidian'a Gönder") {
+            withArticle(subject) { markdown in
+                do {
+                    let file = try Store.writeToObsidian(markdown, title: subject.title)
+                    store.notify("Obsidian'a kaydedildi: \(file.deletingPathExtension().lastPathComponent)")
+                } catch {
+                    store.notify(error.localizedDescription)
+                }
+            }
+        }
         let highlights = store.highlights(for: subject.url)
         if !highlights.isEmpty {
             Divider()
@@ -200,9 +258,11 @@ struct DetailView: View {
 
     private func withArticle(_ subject: Subject, _ use: @escaping (String) -> Void) {
         let highlights = store.highlights(for: subject.url)
+        var note: String?
+        if case .item(let item) = subject { note = item.note }
         proxy.article { info in
             guard let info, !(info.markdown ?? "").isEmpty else { return NSSound.beep() }
-            use(Store.articleMarkdown(info, fallbackTitle: subject.title, highlights: highlights))
+            use(Store.articleMarkdown(info, fallbackTitle: subject.title, note: note, highlights: highlights))
         }
     }
 }
@@ -213,6 +273,8 @@ struct HighlightsPanel: View {
     let url: URL
     let title: String
     let proxy: ReaderProxy
+    @State private var noting: Highlight?
+    @State private var noteText = ""
 
     var body: some View {
         let list = store.highlights(for: url)
@@ -249,6 +311,10 @@ struct HighlightsPanel: View {
                                     Button("Markdown Olarak Kopyala") {
                                         Actions.copyText(Store.markdown(title: title, url: url, highlights: [h]))
                                     }
+                                    Button(h.note == nil ? "Not Ekle…" : "Notu Düzenle…") {
+                                        noteText = h.note ?? ""
+                                        noting = h
+                                    }
                                     Divider()
                                     Button("Vurguyu Sil", role: .destructive) { store.deleteHighlight(h.id) }
                                 }
@@ -272,21 +338,10 @@ struct HighlightsPanel: View {
                 .padding(12)
             }
         }
-    }
-}
-
-struct HighlightQuote: View {
-    let highlight: Highlight
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 10) {
-            RoundedRectangle(cornerRadius: 1)
-                .fill(Color(red: 0.95, green: 0.76, blue: 0.20))
-                .frame(width: 2)
-            Text(highlight.text)
-                .font(.system(size: 13, design: .serif))
-                .lineSpacing(2)
-                .fixedSize(horizontal: false, vertical: true)
+        .alert("Vurguya Not", isPresented: Binding(get: { noting != nil }, set: { if !$0 { noting = nil } })) {
+            TextField("Not", text: $noteText, axis: .vertical)
+            Button("Kaydet") { if let h = noting { store.setHighlightNote(h.id, noteText) } }
+            Button("Vazgeç", role: .cancel) {}
         }
     }
 }

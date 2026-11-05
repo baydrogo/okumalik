@@ -1,6 +1,6 @@
 import Foundation
 
-/// Minimal RSS 2.0 / RSS 1.0 (RDF) / Atom parser built on XMLParser.
+/// Minimal RSS 2.0 / RSS 1.0 (RDF) / Atom parser built on XMLParser, plus JSON Feed.
 final class FeedParser: NSObject, XMLParserDelegate {
     struct Entry {
         var title = ""
@@ -24,6 +24,9 @@ final class FeedParser: NSObject, XMLParserDelegate {
     private var entries: [Entry] = []
 
     static func parse(_ data: Data) -> Result? {
+        if data.first(where: { !($0 == 0x20 || $0 == 0x0A || $0 == 0x0D || $0 == 0x09) }) == UInt8(ascii: "{") {
+            return parseJSON(data)
+        }
         let delegate = FeedParser()
         let parser = XMLParser(data: data)
         parser.delegate = delegate
@@ -34,6 +37,29 @@ final class FeedParser: NSObject, XMLParserDelegate {
             title: delegate.feedTitle.map(HTMLTools.stripTags),
             siteLink: delegate.siteLink.flatMap { URL(string: $0) },
             entries: delegate.entries
+        )
+    }
+
+    /// JSON Feed 1.x (jsonfeed.org).
+    private static func parseJSON(_ data: Data) -> Result? {
+        guard let feed = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              (feed["version"] as? String)?.contains("jsonfeed") == true,
+              let items = feed["items"] as? [[String: Any]] else { return nil }
+        let entries = items.compactMap { item -> Entry? in
+            guard let link = (item["url"] ?? item["external_url"]) as? String else { return nil }
+            let body = (item["summary"] ?? item["content_text"] ?? item["content_html"]) as? String ?? ""
+            return Entry(
+                title: HTMLTools.stripTags(item["title"] as? String ?? ""),
+                link: link,
+                guid: (item["id"] as? String) ?? "",
+                date: ((item["date_published"] ?? item["date_modified"]) as? String).flatMap(DateParsing.parse),
+                summary: HTMLTools.excerpt(body)
+            )
+        }
+        return Result(
+            title: (feed["title"] as? String).map(HTMLTools.stripTags),
+            siteLink: (feed["home_page_url"] as? String).flatMap { URL(string: $0) },
+            entries: entries
         )
     }
 

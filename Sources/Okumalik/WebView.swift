@@ -11,6 +11,16 @@ final class ReaderProxy: ObservableObject {
     func scroll(to id: UUID) { coordinator?.scroll(to: id) }
     func refetch() { coordinator?.refetch() }
 
+    /// Finds text in the page; `done` says whether there was a match.
+    func find(_ text: String, backwards: Bool = false, done: @escaping (Bool) -> Void) {
+        guard let webView = coordinator?.webView, !text.isEmpty else { return done(false) }
+        let config = WKFindConfiguration()
+        config.backwards = backwards
+        config.caseSensitive = false
+        config.wraps = true
+        webView.find(text, configuration: config) { done($0.matchFound) }
+    }
+
     func article(_ done: @escaping (ArticleInfo?) -> Void) {
         guard let coordinator else { return done(nil) }
         coordinator.article(done)
@@ -95,8 +105,11 @@ struct WebView: NSViewRepresentable {
     let highlights: [Highlight]
     var focus: UUID?
     let proxy: ReaderProxy
+    /// Where reading stopped last time (0…1).
+    var position: Double? = nil
     let onHighlight: (UUID, String) -> Void
     let onDelete: (UUID) -> Void
+    var onProgress: ((Double) -> Void)? = nil
 
     func makeCoordinator() -> Coordinator { Coordinator(parent: self) }
 
@@ -184,6 +197,8 @@ struct WebView: NSViewRepresentable {
         private var away = false
         private var articleScroll: Double?
         private var pendingScroll: Double?
+        /// The saved reading position is applied once per reader page.
+        private var positionRestored = false
 
         init(parent: WebView) {
             self.parent = parent
@@ -247,6 +262,7 @@ struct WebView: NSViewRepresentable {
             pageURL = url
             readerActive = true
             switching = true
+            positionRestored = false
             readerNavigation = webView?.loadHTMLString(ReaderPage.html(info, style: style), baseURL: URL(string: info.url) ?? url)
         }
 
@@ -288,7 +304,14 @@ struct WebView: NSViewRepresentable {
             restoreHighlights()
             if let y = pendingScroll {
                 pendingScroll = nil
+                positionRestored = true
                 run("window.scrollTo(0, \(y)); true")
+            }
+            if readerActive, !positionRestored {
+                positionRestored = true
+                if pendingFocus == nil, let p = parent.position, p > 0.02 {
+                    run("window.__okm.restorePosition(\(p)); true")
+                }
             }
             reveal()
             updateBack()
@@ -424,6 +447,8 @@ struct WebView: NSViewRepresentable {
             case "copyHighlight": id.map(copyHighlight)
             case "delete": id.map(deleteHighlight)
             case "context": menuHighlight = id
+            case "progress":
+                if readerActive, let value = body["value"] as? Double { parent.onProgress?(value) }
             default: break
             }
         }
@@ -680,6 +705,13 @@ enum ReaderScript {
         var shown = img ? (img.currentSrc || img.src) : null;
         this.lightbox(linked || shown, shown);
       },
+      restorePosition: function (p) {
+        var go = function () {
+          var h = document.documentElement.scrollHeight - window.innerHeight;
+          if (h > 0) window.scrollTo(0, p * h);
+        };
+        if (document.readyState === 'complete') go(); else window.addEventListener('load', go, { once: true });
+      },
       init: function () {
         var self = this;
         document.addEventListener('click', function (e) { self.onClick(e); }, true);
@@ -697,6 +729,16 @@ enum ReaderScript {
         document.addEventListener('keydown', function () { self.hide(); }, true);
         window.addEventListener('scroll', function () { self.hide(); }, true);
         window.addEventListener('resize', function () { self.hide(); });
+        // Reading progress in the reader page, reported once scrolling settles.
+        var settle = null;
+        window.addEventListener('scroll', function () {
+          if (!document.getElementById('okm')) return;
+          clearTimeout(settle);
+          settle = setTimeout(function () {
+            var h = document.documentElement.scrollHeight - window.innerHeight;
+            if (h > 0) self.post({ action: 'progress', value: Math.min(1, Math.max(0, window.scrollY / h)) });
+          }, 600);
+        }, { passive: true });
       }
     };
     window.__okm.init();

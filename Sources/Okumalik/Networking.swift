@@ -40,10 +40,23 @@ enum PageInfo {
 }
 
 enum FeedFetcher {
-    static func fetch(_ url: URL) async throws -> FeedParser.Result {
-        let (data, _) = try await Net.get(url)
+    enum Outcome {
+        case notModified
+        case updated(FeedParser.Result, etag: String?, lastModified: String?)
+    }
+
+    /// Downloads a feed unless the server says it hasn't changed since the last check.
+    static func fetch(_ url: URL, etag: String? = nil, lastModified: String? = nil) async throws -> Outcome {
+        var request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData)
+        if let etag { request.setValue(etag, forHTTPHeaderField: "If-None-Match") }
+        if let lastModified { request.setValue(lastModified, forHTTPHeaderField: "If-Modified-Since") }
+        let (data, response) = try await Net.session.data(for: request)
+        let http = response as? HTTPURLResponse
+        if http?.statusCode == 304 { return .notModified }
+        if let code = http?.statusCode, !(200..<300).contains(code) { throw AppError.http(code) }
         guard let result = FeedParser.parse(data) else { throw AppError.noFeedFound }
-        return result
+        return .updated(result, etag: http?.value(forHTTPHeaderField: "ETag"),
+                        lastModified: http?.value(forHTTPHeaderField: "Last-Modified"))
     }
 
     /// Accepts either a feed URL or a web page URL and finds the feed behind it.
@@ -54,7 +67,7 @@ enum FeedFetcher {
         let html = HTMLTools.decode(data)
         var candidates = HTMLTools.feedLinks(in: html, base: finalURL)
         if candidates.isEmpty {
-            candidates = ["feed", "rss", "feed.xml", "rss.xml", "atom.xml", "index.xml"]
+            candidates = ["feed", "rss", "feed.xml", "rss.xml", "atom.xml", "index.xml", "feed.json"]
                 .compactMap { URL(string: "/" + $0, relativeTo: finalURL)?.absoluteURL }
         }
         for candidate in candidates {
@@ -143,7 +156,7 @@ enum HTMLTools {
     static func feedLinks(in html: String, base: URL) -> [URL] {
         tags("link", in: html).compactMap { attrs in
             guard let type = attrs["type"]?.lowercased(),
-                  type.contains("rss+xml") || type.contains("atom+xml"),
+                  type.contains("rss+xml") || type.contains("atom+xml") || type.contains("feed+json"),
                   let href = attrs["href"] else { return nil }
             return URL(string: href, relativeTo: base)?.absoluteURL
         }

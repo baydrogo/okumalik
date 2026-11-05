@@ -22,6 +22,9 @@ struct AddSheet: View {
 
                 TextField("Adres", text: $urlText, prompt: Text(kind == .feed ? "site.com ya da akış adresi" : "https://…"))
                     .onSubmit(submit)
+                if let note = duplicateNote {
+                    Text(note).font(.callout).foregroundStyle(.secondary)
+                }
 
                 LabeledContent("Etiketler") {
                     TagEditor(tags: $tags)
@@ -54,6 +57,17 @@ struct AddSheet: View {
         }
     }
 
+    /// Tells, while typing, that the link is already saved.
+    private var duplicateNote: String? {
+        guard kind != .feed, let url = Store.normalizedURL(urlText) else { return nil }
+        let kinds = store.savedKinds(for: url)
+        guard let first = kinds.first else { return nil }
+        let target: ItemKind = kind == .bookmark ? .bookmark : .readLater
+        return kinds.contains(target)
+            ? "Bu bağlantı zaten \(target.inName); eklerseniz başa taşınır."
+            : "Bu bağlantı \(first.name) listesinde de var."
+    }
+
     private func submit() {
         error = nil
         switch kind {
@@ -70,7 +84,8 @@ struct AddSheet: View {
             }
         case .readLater, .bookmark:
             do {
-                try store.addLink(urlText, kind: kind == .bookmark ? .bookmark : .readLater, tags: tags)
+                let target: ItemKind = kind == .bookmark ? .bookmark : .readLater
+                store.notify(try store.addLink(urlText, kind: target, tags: tags).message(for: target))
                 dismiss()
             } catch {
                 self.error = error.localizedDescription

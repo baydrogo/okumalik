@@ -15,6 +15,9 @@ struct SavedItem: Identifiable, Codable, Hashable {
     var isRead = false
     var tags: [String] = []
     var dateAdded = Date()
+    var note: String?
+    /// Set while the link is in the trash.
+    var deletedAt: Date?
 }
 
 struct Feed: Identifiable, Codable, Hashable {
@@ -22,9 +25,15 @@ struct Feed: Identifiable, Codable, Hashable {
     var url: URL
     var title: String
     var siteURL: URL?
+    /// Last successful check.
     var lastUpdated: Date?
     /// Labels for the subscription; its entries show up under these tags too.
     var tags: [String] = []
+    /// Why the last check failed; nil once it works again.
+    var lastError: String?
+    /// Validators from the last response, so unchanged feeds aren't downloaded again.
+    var etag: String?
+    var lastModified: String?
 }
 
 extension Feed {
@@ -37,6 +46,9 @@ extension Feed {
         siteURL = try c.decodeIfPresent(URL.self, forKey: .siteURL)
         lastUpdated = try c.decodeIfPresent(Date.self, forKey: .lastUpdated)
         tags = try c.decodeIfPresent([String].self, forKey: .tags) ?? []
+        lastError = try c.decodeIfPresent(String.self, forKey: .lastError)
+        etag = try c.decodeIfPresent(String.self, forKey: .etag)
+        lastModified = try c.decodeIfPresent(String.self, forKey: .lastModified)
     }
 }
 
@@ -59,9 +71,11 @@ struct Highlight: Identifiable, Codable, Hashable {
     var pageTitle: String
     var text: String
     var date = Date()
+    var note: String?
+    /// Set while the highlight is in the trash.
+    var deletedAt: Date?
 }
 
-/// Article text and metadata extracted by Defuddle.
 /// An article as extracted by the reader (Defuddle), also the format of the offline copy.
 struct ArticleInfo: Codable {
     var url: String
@@ -77,7 +91,7 @@ struct ArticleInfo: Codable {
 }
 
 enum SidebarSection: Hashable {
-    case readLater, archive, bookmarks, highlights, allFeeds
+    case readLater, archive, bookmarks, highlights, trash, allFeeds
     case feed(UUID)
     case tag(String)
 }
@@ -123,6 +137,7 @@ enum AppError: LocalizedError {
     case noFeedFound
     case duplicateFeed
     case http(Int)
+    case noObsidianFolder
 
     var errorDescription: String? {
         switch self {
@@ -130,6 +145,7 @@ enum AppError: LocalizedError {
         case .noFeedFound: "Bu adreste RSS/Atom akışı bulunamadı."
         case .duplicateFeed: "Bu akış zaten ekli."
         case .http(let code): "Sunucu hata döndürdü (\(code))."
+        case .noObsidianFolder: "Önce Ayarlar'dan Obsidian klasörünü seçin."
         }
     }
 }

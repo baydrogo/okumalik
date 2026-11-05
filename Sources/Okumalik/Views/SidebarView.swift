@@ -2,9 +2,9 @@ import SwiftUI
 
 struct SidebarView: View {
     @EnvironmentObject private var store: Store
-    @ObservedObject private var icons = SiteIcons.shared
     @Binding var selection: SidebarSection?
     @State private var renaming: Feed?
+    @State private var removing: Feed?
     @State private var newName = ""
     @State private var renamingTag: String?
     @State private var deletingTag: String?
@@ -22,6 +22,8 @@ struct SidebarView: View {
                     .tag(SidebarSection.highlights)
                 Label("Arşiv", systemImage: "archivebox")
                     .tag(SidebarSection.archive)
+                Label("Çöp Kutusu", systemImage: "trash")
+                    .tag(SidebarSection.trash)
             }
 
             Section("Akışlar") {
@@ -30,9 +32,19 @@ struct SidebarView: View {
                     .tag(SidebarSection.allFeeds)
                 ForEach(store.feeds) { feed in
                     Label {
-                        Text(feed.title).lineLimit(1)
+                        HStack(spacing: 4) {
+                            Text(feed.title).lineLimit(1)
+                            if let error = feed.lastError {
+                                Image(systemName: "exclamationmark.triangle.fill")
+                                    .font(.system(size: 9))
+                                    .foregroundStyle(Color.okmAccent)
+                                    .help("Güncellenemedi: \(error)")
+                            }
+                        }
                     } icon: {
-                        feedIcon(feed)
+                        SiteIcon(url: feed.siteURL ?? feed.url) {
+                            Circle().fill(.tertiary).frame(width: 5, height: 5)
+                        }
                     }
                     .badge(store.unreadCount(feed: feed.id))
                     .tag(SidebarSection.feed(feed.id))
@@ -40,16 +52,13 @@ struct SidebarView: View {
                     .contextMenu {
                         Button("Tümünü Okundu Say") { store.markAllRead(feed: feed.id) }
                         Button("Yeniden Adlandır…") { newName = feed.title; renaming = feed }
-                        TagMenu(target: .feed(feed.id))
+                        TagMenu(targets: [.feed(feed.id)])
                         if let site = feed.siteURL {
                             Button("Siteyi Aç") { Actions.open(site) }
                         }
                         Button("Akış Adresini Kopyala") { Actions.copy(feed.url) }
                         Divider()
-                        Button("Akışı Sil", role: .destructive) {
-                            if selection == .feed(feed.id) { selection = .allFeeds }
-                            store.removeFeed(feed.id)
-                        }
+                        Button("Akışı Sil…", role: .destructive) { removing = feed }
                     }
                 }
             }
@@ -99,6 +108,18 @@ struct SidebarView: View {
             Button("Vazgeç", role: .cancel) {}
         }
         .confirmationDialog(
+            "“\(removing?.title ?? "")” akışı silinsin mi?",
+            isPresented: Binding(get: { removing != nil }, set: { if !$0 { removing = nil } })
+        ) {
+            Button("Akışı Sil", role: .destructive) {
+                guard let feed = removing else { return }
+                if selection == .feed(feed.id) { selection = .allFeeds }
+                store.removeFeed(feed.id)
+            }
+        } message: {
+            Text("Akışın yazıları da silinir. Okunacaklar'a ya da Yer İmleri'ne kaydettikleriniz kalır.")
+        }
+        .confirmationDialog(
             "“#\(deletingTag ?? "")” etiketi silinsin mi?",
             isPresented: Binding(get: { deletingTag != nil }, set: { if !$0 { deletingTag = nil } })
         ) {
@@ -109,24 +130,6 @@ struct SidebarView: View {
             }
         } message: {
             Text("Bağlantılar ve akışlar silinmez, yalnızca bu etiket kaldırılır.")
-        }
-    }
-
-    /// The site's own icon; a small dot until (or unless) one is found.
-    @ViewBuilder
-    private func feedIcon(_ feed: Feed) -> some View {
-        let _ = icons.version
-        if let image = icons.icon(for: feed.siteURL ?? feed.url) {
-            Image(nsImage: image)
-                .resizable()
-                .interpolation(.high)
-                .frame(width: 16, height: 16)
-                .clipShape(RoundedRectangle(cornerRadius: 3))
-        } else {
-            Circle()
-                .fill(.tertiary)
-                .frame(width: 5, height: 5)
-                .frame(width: 16, height: 16)
         }
     }
 

@@ -12,6 +12,10 @@ extension Store {
         )
     }
 
+    func noteBinding(_ id: UUID) -> Binding<String> {
+        Binding(get: { self.items.first { $0.id == id }?.note ?? "" }, set: { self.updateItem(id, note: $0) })
+    }
+
     func tagBinding(_ target: TagTarget) -> Binding<[String]> {
         Binding(get: { self.tags(of: target) }, set: { self.setTags($0, on: target) })
     }
@@ -64,6 +68,13 @@ struct BookmarkDetail: View {
                     TagEditor(tags: store.tagBinding(.item(item.id)))
                 }
 
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("Not").font(.system(size: 13, weight: .semibold))
+                    TextField("Kendiniz için bir not", text: store.noteBinding(item.id), axis: .vertical)
+                        .textFieldStyle(.roundedBorder)
+                        .lineLimit(2...10)
+                }
+
                 Text("Eklendi: \(item.dateAdded.formatted(date: .long, time: .shortened))")
                     .font(.caption)
                     .foregroundStyle(.tertiary)
@@ -76,7 +87,7 @@ struct BookmarkDetail: View {
     }
 }
 
-/// Edit sheet for any saved link (title, description, tags).
+/// Edit sheet for any saved link (title, description, tags, note).
 struct ItemEditSheet: View {
     @EnvironmentObject private var store: Store
     @Environment(\.dismiss) private var dismiss
@@ -91,6 +102,8 @@ struct ItemEditSheet: View {
                 LabeledContent("Etiketler") {
                     TagEditor(tags: store.tagBinding(.item(id)))
                 }
+                TextField("Not", text: store.noteBinding(id), prompt: Text("Kendiniz için bir not"), axis: .vertical)
+                    .lineLimit(2...10)
             }
             .formStyle(.grouped)
             HStack {

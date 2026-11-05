@@ -34,6 +34,8 @@ struct OkumalikApp: App {
                 Divider()
                 Button("Seçili Metni Vurgula") { NotificationCenter.default.post(name: .okmHighlight, object: nil) }
                     .keyboardShortcut("h", modifiers: [.command, .shift])
+                Button("Sayfada Bul…") { NotificationCenter.default.post(name: .okmFind, object: nil) }
+                    .keyboardShortcut("f")
                 Divider()
             }
         }
@@ -57,8 +59,7 @@ enum Actions {
 
     static func saveMarkdown(_ text: String, name: String) {
         let panel = NSSavePanel()
-        let safe = name.components(separatedBy: CharacterSet(charactersIn: "/:\\?%*|\"<>")).joined(separator: "-")
-        panel.nameFieldStringValue = String(safe.prefix(80)) + ".md"
+        panel.nameFieldStringValue = String(Store.fileName(name).prefix(80)) + ".md"
         panel.allowedContentTypes = [.init(filenameExtension: "md") ?? .plainText]
         guard panel.runModal() == .OK, let url = panel.url else { return }
         try? text.write(to: url, atomically: true, encoding: .utf8)

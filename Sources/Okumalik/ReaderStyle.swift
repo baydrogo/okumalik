@@ -121,6 +121,7 @@ extension Color {
 
 extension Notification.Name {
     static let okmHighlight = Notification.Name("okmHighlight")
+    static let okmFind = Notification.Name("okmFind")
 }
 
 /// The "Aa" popover: reader toggle, size, font and background theme.

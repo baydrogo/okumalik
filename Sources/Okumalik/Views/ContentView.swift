@@ -3,29 +3,33 @@ import SwiftUI
 struct ContentView: View {
     @EnvironmentObject private var store: Store
     @State private var section: SidebarSection? = .readLater
-    @State private var selection: DetailID?
+    @State private var selection = Set<DetailID>()
     @State private var search = ""
     @State private var newTag = ""
 
+    /// The detail column shows a page only when exactly one row is selected.
+    private var single: DetailID? { selection.count == 1 ? selection.first : nil }
+
     var body: some View {
         split
-        .searchable(text: $search, placement: .sidebar, prompt: "Ara")
-        .sheet(isPresented: $store.showAddSheet) {
-            AddSheet(initialKind: addKind, initialTags: currentTag.map { [$0] } ?? [])
-        }
-        .alert("Yeni Etiket", isPresented: Binding(get: { store.tagPrompt != nil }, set: { if !$0 { store.tagPrompt = nil } })) {
-            TextField("Etiket", text: $newTag)
-            Button("Ekle") {
-                if let target = store.tagPrompt, let tag = Store.normalizedTag(newTag) { store.addTag(tag, to: target) }
-                newTag = ""
+            .searchable(text: $search, placement: .sidebar, prompt: "Ara")
+            .sheet(isPresented: $store.showAddSheet) {
+                AddSheet(initialKind: addKind, initialTags: currentTag.map { [$0] } ?? [])
             }
-            Button("Vazgeç", role: .cancel) { newTag = "" }
-        }
-        .onChange(of: section) { selection = nil }
-        .onChange(of: selection) {
-            if case .entry(let id) = selection { store.setEntryRead(id, true) }
-        }
-        .onOpenURL { store.handleOpenURL($0) }
+            .alert("Yeni Etiket", isPresented: Binding(get: { !store.tagPrompt.isEmpty }, set: { if !$0 { store.tagPrompt = [] } })) {
+                TextField("Etiket", text: $newTag)
+                Button("Ekle") {
+                    if let tag = Store.normalizedTag(newTag) { store.tagPrompt.forEach { store.addTag(tag, to: $0) } }
+                    newTag = ""
+                }
+                Button("Vazgeç", role: .cancel) { newTag = "" }
+            }
+            .overlay(alignment: .bottom) { toast }
+            .onChange(of: section) { selection = [] }
+            .onChange(of: selection) {
+                if case .entry(let id) = single { store.setEntryRead(id, true) }
+            }
+            .onOpenURL { store.handleOpenURL($0) }
     }
 
     /// Bookmarks need no preview: their list takes the whole width next to the sidebar.
@@ -44,7 +48,7 @@ struct ContentView: View {
                 ItemListView(section: section ?? .readLater, selection: $selection, search: search)
                     .navigationSplitViewColumnWidth(min: 280, ideal: 340, max: 480)
             } detail: {
-                DetailView(selection: selection)
+                DetailView(selection: single)
             }
         }
     }
@@ -52,6 +56,21 @@ struct ContentView: View {
     private var sidebar: some View {
         SidebarView(selection: $section)
             .navigationSplitViewColumnWidth(min: 190, ideal: 220, max: 300)
+    }
+
+    @ViewBuilder
+    private var toast: some View {
+        if let message = store.toast {
+            Text(message)
+                .font(.system(size: 13, weight: .medium))
+                .padding(.horizontal, 16)
+                .padding(.vertical, 9)
+                .background(.regularMaterial, in: Capsule())
+                .shadow(color: .black.opacity(0.12), radius: 10, y: 4)
+                .padding(.bottom, 24)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .animation(.easeOut(duration: 0.2), value: message)
+        }
     }
 
     private var currentTag: String? {

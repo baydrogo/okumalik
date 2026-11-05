@@ -7,7 +7,9 @@ struct SettingsView: View {
     @AppStorage("refreshMinutes") private var refreshMinutes = 30
     @AppStorage(Store.readRetentionKey) private var readRetention = 30
     @AppStorage(Store.copyRetentionKey) private var copyRetention = 30
+    @AppStorage(Store.obsidianFolderKey) private var obsidianFolder = ""
     @State private var status: String?
+    @State private var pendingRestore: Store.Snapshot?
 
     private static let bookmarklets: [(String, String)] = [
         ("Sonra Oku", "add"),
@@ -55,16 +57,65 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
             }
 
-            Section("Veri") {
-                Button("Veri Klasörünü Göster") { NSWorkspace.shared.open(Store.dataDirectory) }
+            Section {
+                LabeledContent("Klasör") {
+                    Text(obsidianFolder.isEmpty ? "Seçilmedi" : (obsidianFolder as NSString).abbreviatingWithTildeInPath)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+                HStack {
+                    Button("Seç…", action: chooseObsidianFolder)
+                    if !obsidianFolder.isEmpty { Button("Kaldır") { obsidianFolder = "" } }
+                }
+            } header: {
+                Text("Obsidian")
+            } footer: {
+                Text("Okurken \"…\" menüsündeki \"Obsidian'a Gönder\", yazıyı notunuz ve vurgularınızla birlikte bu klasöre Markdown notu olarak kaydeder.")
+                    .foregroundStyle(.secondary)
+            }
+
+            Section {
+                HStack {
+                    Button("Yedeği Dışa Aktar…", action: exportLibrary)
+                    Button("Yedekten Geri Yükle…", action: chooseBackup)
+                }
+                HStack {
+                    Button("Yer İmlerini İçe Aktar…", action: importBookmarks)
+                    Button("Yer İmlerini Dışa Aktar…", action: exportBookmarks)
+                }
+                HStack {
+                    Button("Veri Klasörünü Göster") { NSWorkspace.shared.open(Store.dataDirectory) }
+                    Button("Otomatik Yedekler") { NSWorkspace.shared.open(Store.backupDirectory) }
+                }
                 if let status {
                     Text(status).foregroundStyle(.secondary)
                 }
+            } header: {
+                Text("Veri")
+            } footer: {
+                Text("Kitaplık her gün kendiliğinden yedeklenir; son 10 günün yedeği tutulur. Yer imleri Firefox, Chrome, Safari ya da Linkding'in HTML biçimiyle aktarılır.")
+                    .foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped)
+        .alert("Yedek geri yüklensin mi?", isPresented: restoreAlert) {
+            Button("Geri Yükle", role: .destructive) {
+                if let backup = pendingRestore { store.restoreLibrary(backup) }
+                status = "Yedek geri yüklendi."
+            }
+            Button("Vazgeç", role: .cancel) {}
+        } message: {
+            if let b = pendingRestore {
+                Text("Yedekte \(b.items.count) bağlantı, \(b.feeds.count) akış ve \(b.highlights.count) vurgu var. Şimdiki kitaplık bunlarla değiştirilecek; değiştirilmeden önce otomatik yedeklerin arasına kaydedilir.")
+            }
+        }
         .frame(width: 460)
         .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private var restoreAlert: Binding<Bool> {
+        Binding(get: { pendingRestore != nil }, set: { if !$0 { pendingRestore = nil } })
     }
 
     @ViewBuilder
@@ -81,6 +132,62 @@ struct SettingsView: View {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(js, forType: .string)
         status = "Yer imciği panoya kopyalandı."
+    }
+
+    private func chooseObsidianFolder() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.prompt = "Seç"
+        panel.message = "Obsidian kasanızda notların kaydedileceği klasörü seçin."
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        obsidianFolder = url.path
+    }
+
+    private func exportLibrary() {
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = "Okumalik-yedek-\(Date().formatted(.iso8601.year().month().day())).json"
+        panel.allowedContentTypes = [.json]
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do {
+            try store.exportLibrary(to: url)
+            status = "Yedek kaydedildi."
+        } catch {
+            status = error.localizedDescription
+        }
+    }
+
+    private func chooseBackup() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.json]
+        panel.directoryURL = Store.backupDirectory
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do {
+            pendingRestore = try Store.readLibrary(at: url)
+        } catch {
+            status = "Bu dosya bir Okumalık yedeği değil."
+        }
+    }
+
+    private func importBookmarks() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.html]
+        guard panel.runModal() == .OK, let url = panel.url, let data = try? Data(contentsOf: url) else { return }
+        let result = store.importBookmarks(HTMLTools.decode(data))
+        status = "\(result.added) yer imi eklendi" + (result.skipped > 0 ? ", \(result.skipped) tanesi zaten vardı." : ".")
+    }
+
+    private func exportBookmarks() {
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = "Okumalik-yer-imleri.html"
+        panel.allowedContentTypes = [.html]
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do {
+            try store.exportBookmarks().write(to: url, atomically: true, encoding: .utf8)
+            status = "\(store.items.count) bağlantı dışa aktarıldı."
+        } catch {
+            status = error.localizedDescription
+        }
     }
 
     private func importOPML() {

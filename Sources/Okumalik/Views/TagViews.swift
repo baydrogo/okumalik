@@ -77,19 +77,22 @@ struct TagChip: View {
 }
 
 /// "Etiketler" submenu with a checkmark per tag in use, for context menus.
+/// With several targets, a tag is checked when all of them carry it, and choosing it adds or removes it for all.
 struct TagMenu: View {
     @EnvironmentObject private var store: Store
-    let target: TagTarget
+    let targets: [TagTarget]
     var title = "Etiketler"
 
     var body: some View {
         Menu(title) {
-            let current = store.tags(of: target)
             ForEach(store.allTags, id: \.self) { tag in
-                Toggle("#" + tag, isOn: Binding(get: { current.contains(tag) }, set: { _ in store.toggleTag(tag, on: target) }))
+                let all = targets.allSatisfy { store.tags(of: $0).contains(tag) }
+                Toggle("#" + tag, isOn: Binding(get: { all }, set: { on in
+                    for target in targets where store.tags(of: target).contains(tag) != on { store.toggleTag(tag, on: target) }
+                }))
             }
             if !store.allTags.isEmpty { Divider() }
-            Button("Yeni Etiket…") { store.tagPrompt = target }
+            Button("Yeni Etiket…") { store.tagPrompt = targets }
         }
     }
 }

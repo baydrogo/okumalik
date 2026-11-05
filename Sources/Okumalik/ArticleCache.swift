@@ -4,7 +4,7 @@ import WebKit
 
 /// Offline copies of articles, extracted once and opened instantly afterwards.
 @MainActor
-final class ArticleCache {
+final class ArticleCache: ObservableObject {
     static let shared = ArticleCache()
 
     static var directory: URL = {
@@ -13,7 +13,10 @@ final class ArticleCache {
         return dir
     }()
 
+    /// Pages whose article couldn't be extracted in the background (this session).
+    @Published private(set) var failed: Set<URL> = []
     private var memory: [String: ArticleInfo] = [:]
+    private var plainTexts: [String: String] = [:]
     private var queue: [URL] = []
     private var extractor: Extractor?
 
@@ -35,17 +38,43 @@ final class ArticleCache {
         memory[url.absoluteString] != nil || FileManager.default.fileExists(atPath: file(for: url).path)
     }
 
+    /// Estimated reading time, if there is a copy.
+    func minutes(for url: URL) -> Int? {
+        guard let words = article(for: url)?.wordCount, words > 0 else { return nil }
+        return max(1, Int((Double(words) / 220).rounded()))
+    }
+
+    /// The article's text for searching (its Markdown), if there is a copy.
+    func plainText(for url: URL) -> String? {
+        if let hit = plainTexts[url.absoluteString] { return hit }
+        guard let info = article(for: url) else { return nil }
+        let text = info.markdown ?? HTMLTools.stripTags(info.content ?? "")
+        plainTexts[url.absoluteString] = text
+        return text
+    }
+
     func save(_ info: ArticleInfo, for urls: [URL]) {
         guard let data = try? JSONEncoder().encode(info) else { return }
+        objectWillChange.send()
         for url in Set(urls) {
             memory[url.absoluteString] = info
+            plainTexts[url.absoluteString] = nil
+            failed.remove(url)
             try? data.write(to: file(for: url), options: .atomic)
         }
     }
 
     func remove(_ url: URL) {
+        objectWillChange.send()
         memory[url.absoluteString] = nil
+        plainTexts[url.absoluteString] = nil
         try? FileManager.default.removeItem(at: file(for: url))
+    }
+
+    /// Tries a failed page again.
+    func retry(_ url: URL) {
+        failed.remove(url)
+        prefetch([url])
     }
 
     /// Deletes copies saved before `date`, except those for the given addresses.
@@ -61,7 +90,11 @@ final class ArticleCache {
                 removed = true
             }
         }
-        if removed { memory.removeAll() }
+        if removed {
+            objectWillChange.send()
+            memory.removeAll()
+            plainTexts.removeAll()
+        }
     }
 
     /// Extracts the given pages in the background, one at a time.
@@ -78,7 +111,11 @@ final class ArticleCache {
         self.extractor = extractor
         extractor.run(url) { [weak self] info in
             guard let self else { return }
-            if let info { self.save(info, for: [url, URL(string: info.url)].compactMap { $0 }) }
+            if let info {
+                self.save(info, for: [url, URL(string: info.url)].compactMap { $0 })
+            } else {
+                self.failed.insert(url)
+            }
             self.extractor = nil
             self.next()
         }
