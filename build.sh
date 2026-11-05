@@ -24,6 +24,8 @@ BIN="$SCRATCH/release/Okumalik"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN" "$APP/Contents/MacOS/"
+# Drop debug symbols; they are most of the binary's size.
+strip -x "$APP/Contents/MacOS/Okumalik"
 cp Resources/Info.plist "$APP/Contents/"
 cp Resources/AppIcon.icns "$APP/Contents/Resources/"
 cp Resources/Vendor/defuddle.js Resources/Vendor/defuddle-LICENSE.txt "$APP/Contents/Resources/"
