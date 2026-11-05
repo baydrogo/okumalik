@@ -310,8 +310,9 @@ struct ItemListView: View {
                     }
                 }
                 if !entries.isEmpty {
+                    let queued = queuedKeys
                     Section {
-                        ForEach(entries) { entryRow($0, showFeed: true) }
+                        ForEach(entries) { entryRow($0, showFeed: true, queued: queued) }
                     } header: {
                         sectionHeader("Akışlar")
                     }
@@ -395,13 +396,19 @@ struct ItemListView: View {
         if entries.isEmpty {
             emptyState
         } else {
-            list { ForEach(entries) { entryRow($0, showFeed: section == .allFeeds) } }
+            let queued = queuedKeys
+            list { ForEach(entries) { entryRow($0, showFeed: section == .allFeeds, queued: queued) } }
         }
     }
 
-    private func entryRow(_ entry: FeedEntry, showFeed: Bool) -> some View {
+    /// Addresses on the reading list, worked out once per list rather than per row.
+    private var queuedKeys: Set<String> {
+        Set(store.items.filter { $0.kind == .readLater && !$0.isRead }.map(\.url.dedupeKey))
+    }
+
+    private func entryRow(_ entry: FeedEntry, showFeed: Bool, queued: Set<String>) -> some View {
         EntryRow(entry: entry, feedTitle: showFeed ? store.feed(entry.feedID)?.title : nil,
-                 queued: store.queuedItem(for: entry.link) != nil)
+                 queued: queued.contains(entry.link.dedupeKey))
             .tag(DetailID.entry(entry.id))
     }
 

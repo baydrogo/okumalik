@@ -90,6 +90,15 @@ struct ArticleInfo: Codable {
     var content: String?
 }
 
+extension ArticleInfo {
+    /// Decodes the JSON string the page scripts return.
+    init?(json: Any?) {
+        guard let text = json as? String,
+              let info = try? JSONDecoder().decode(ArticleInfo.self, from: Data(text.utf8)) else { return nil }
+        self = info
+    }
+}
+
 enum SidebarSection: Hashable {
     case readLater, archive, bookmarks, highlights, trash, allFeeds
     case feed(UUID)

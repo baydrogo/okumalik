@@ -160,7 +160,7 @@ extension Store {
     func purgeItem(_ id: UUID) {
         guard let item = trash.first(where: { $0.id == id }) else { return }
         trash.removeAll { $0.id == id }
-        dropCopyIfUnused(item.url)
+        dropCopies(of: [item.url])
     }
 
     func purgeHighlight(_ id: UUID) {
@@ -171,7 +171,7 @@ extension Store {
         let urls = trash.map(\.url)
         trash = []
         trashedHighlights = []
-        urls.forEach(dropCopyIfUnused)
+        dropCopies(of: urls)
     }
 
     /// Removes trash older than `trashDays`.
@@ -180,7 +180,7 @@ extension Store {
         let old = trash.filter { ($0.deletedAt ?? now) < cutoff }
         if !old.isEmpty {
             trash.removeAll { ($0.deletedAt ?? now) < cutoff }
-            old.map(\.url).forEach(dropCopyIfUnused)
+            dropCopies(of: old.map(\.url))
         }
         if trashedHighlights.contains(where: { ($0.deletedAt ?? now) < cutoff }) {
             trashedHighlights.removeAll { ($0.deletedAt ?? now) < cutoff }
@@ -192,8 +192,10 @@ extension Store {
         Set(items.map(\.url) + trash.map(\.url) + highlights.map(\.url) + trashedHighlights.map(\.url))
     }
 
-    private func dropCopyIfUnused(_ url: URL) {
-        if !addressesInUse.contains(url) { ArticleCache.shared.remove(url) }
+    /// Removes the offline copies of these addresses unless something still refers to them.
+    private func dropCopies(of urls: [URL]) {
+        let inUse = addressesInUse
+        for url in urls where !inUse.contains(url) { ArticleCache.shared.remove(url) }
     }
 
     // MARK: Reading position

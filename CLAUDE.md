@@ -16,5 +16,5 @@
 
 - Arayüz ve kullanıcıyla yazışma Türkçe.
 - Derleme ve kurulum: `./build.sh --install` (Xcode gerekmez; Command Line Tools ve macOS 26 SDK'sı kullanılır).
-- Kullanıcı verisi: `~/Library/Application Support/Okumalik/` — testlerde bu dosyalara yazma.
+- Kullanıcı verisi: `~/Library/Application Support/Okumalik/` — testlerde bu dosyalara yazma; test programlarını `OKUMALIK_DATA_DIR=<geçici klasör>` ile çalıştır (veri klasörünü oraya yönlendirir).
 - iCloud kullanılmıyor; kullanıcı istemiyor.

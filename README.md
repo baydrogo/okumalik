@@ -13,19 +13,34 @@ Xcode gerekmez; Command Line Tools yeterli.
 
 ## Özellikler
 
-- **Okunacaklar / Arşiv** — bağlantı ekle, okuyunca arşivle (⌘E).
-- **Yer İmleri** — önizleme yok; liste bütün genişliği kaplar (Linkding tarzı): site simgesi ve başlık, etiketler ve açıklama, tarih ve Aç · Düzenle · Okunacaklara Taşı · Sil. Başlığa tıklamak ya da çift tıklamak bağlantıyı tarayıcıda açar; etikete tıklamak listeyi süzer. Site simgeleri sitenin kendisinden bir kez indirilip `Icons` klasöründe saklanır.
-- **Etiketler** — okunacaklar, yer imleri ve akışlar etiketlenebilir; bir akışın etiketi o akışın yazılarını da kapsar. Sağ tık > "Etiketler" menüsünden işaretleyin ya da bağlantıyı veya akışı kenar çubuğundaki etikete sürükleyin. Etiketler kenar çubuğunda listelenir; sağ tıkla yeniden adlandırılır ya da silinir. Sağ tık > "Düzenle…" ile her bağlantının başlığı ve açıklaması değiştirilebilir.
-- **Vurgular** — metni seçince beliren araç çubuğundan "Vurgula" (ya da ⇧⌘H, sağ tık > "Vurgula"). Bir vurguya tıklayınca ya da sağ tıklayınca kopyalanabilir veya silinebilir. Vurgular sayfa tekrar açıldığında geri gelir; sağdaki panelden ya da kenar çubuğundaki "Vurgular" bölümünden Markdown olarak kopyalanır veya `.md` dosyası olarak dışa aktarılır.
-- **Akışlar** — RSS 2.0, RSS 1.0 ve Atom. Site adresi vermek yeterli, akış otomatik bulunur. OPML içe/dışa aktarma Ayarlar'da. Her akışta en yeni 200 yazı tutulur; Ayarlar > Akışlar'dan okunmuş yazıların ve kayıtlı kopyaların kaç gün sonra silineceği seçilir (varsayılan 30 gün). Okunmamış yazılar silinmez.
-- **Okuma modu** (⇧⌘L) — yazıyı [Defuddle](https://github.com/kepano/defuddle) ile ayıklar; yazar, tarih ve okuma süresini gösterir. "…" menüsünden yazının tamamı (başlık bilgileri ve vurgularla) Markdown olarak kopyalanır ya da dışa aktarılır. "Aa" menüsünden yazı tipi (New York, Charter, Iowan, Georgia, San Francisco, Avenir), boyut (⌘+ / ⌘−) ve arka plan (Sistem, Kâğıt, Beyaz, Sepya, Gece) seçilir.
-- Bağlantıyı pencereye sürükleyip bırakarak ekleme, ⌘N'de panodaki adresi otomatik doldurma.
-- **Tarayıcıdan kaydetme** — Ayarlar > "Tarayıcıdan kaydet" bölümündeki yer imciklerini (bookmarklet) tarayıcınıza ekleyin. Ayrıca:
-  - `okumalik://add?url=…` — sonra oku
-  - `okumalik://bookmark?url=…` — yer imi
-  - `okumalik://feed?url=…` — akışa abone ol
+**Okuma**
+- **Okunacaklar / Arşiv** — bağlantı ekle, okuyunca arşivle (⌘E). Sağ üstteki menüden sıralama (en yeni, en eski, en kısa) ve okuma süresi süzgeci. Satırda okuma süresi, kaldığınız yer (%) ve çevrimdışı kopya durumu görünür; kopya alınamadıysa işarete tıklayıp yeniden deneyin.
+- **Okuma modu** (⇧⌘L) — yazıyı [Defuddle](https://github.com/kepano/defuddle) ile ayıklar; yazar, tarih ve okuma süresini gösterir. "Aa" menüsünden yazı tipi, boyut (⌘+ / ⌘−) ve arka plan. Yazıyı tekrar açınca kaldığınız yerden devam eder. ⌘F ile sayfada bul. Fotoğraflar yazının üstünde büyütülür; yazıdaki bir bağlantıya gidince "Geri" (⌘[) yazıya döndürür.
+- **Çevrimdışı kopya** — Okunacaklar'a eklenen ve okuma modunda açılan yazılar saklanır, anında ve internetsiz açılır. Yazı sitede değiştiyse "…" > "Yazıyı Siteden Yeniden Al".
+- **Vurgular ve notlar** — metni seçince beliren araç çubuğundan "Vurgula" (ya da ⇧⌘H). Vurguya tıklayınca ya da sağ tıklayınca kopyalanır, silinir; sağdaki panelden vurguya not eklenir. Bağlantılara "Düzenle…" ile not yazılır.
+- **Dışa aktarma** — yazının tamamı (başlık bilgileri, not ve vurgularla) ya da yalnızca vurgular Markdown olarak kopyalanır veya kaydedilir. Ayarlar'da Obsidian klasörü seçilirse "…" > "Obsidian'a Gönder" notu doğrudan kasaya yazar.
 
-- **Çevrimdışı kopya** — Okunacaklar'a eklenen yazılar arka planda ayıklanıp saklanır; okuma modunda internet beklenmeden anında açılır, internetsiz de okunur. Okuma modunda açılan her yazı da saklanır. Yazı sitede değiştiyse "…" > "Yazıyı Siteden Yeniden Al".
+**Kaydetme ve düzenleme**
+- **Yer İmleri** — Linkding tarzı tam genişlikte liste: site simgesi, başlık, etiketler, açıklama, tarih ve Aç · Düzenle · Okunacaklara Taşı · Sil. Başlığa tıklamak ya da çift tıklamak bağlantıyı tarayıcıda açar.
+- **Etiketler** — okunacaklar, yer imleri ve akışlar etiketlenir; bir akışın etiketi yazılarını da kapsar. Sağ tık > "Etiketler", sürükle-bırak ya da liste başındaki etiket şeridi. Kenar çubuğundan yeniden adlandırma ve silme.
+- **Yinelenen kontrolü** — aynı sayfa (izleme parametreleri, `www.` ve sondaki `/` yok sayılarak) bir listeye ikinci kez eklenmez, başa taşınır; ekleme penceresi ve bildirim bunu söyler.
+- **Çoklu seçim** — ⌘ ya da ⇧ ile birden fazla satır seçip arşivleme, etiketleme, okundu sayma ya da silme.
+- **Arama** — başlık, adres, açıklama, etiket, not, vurgu ve kayıtlı yazının tam metninde.
+- **Çöp Kutusu** — silinen bağlantılar ve vurgular 30 gün burada kalır; geri yüklenebilir.
+
+**Akışlar**
+- RSS 2.0, RSS 1.0, Atom ve JSON Feed. Site adresi vermek yeterli, akış otomatik bulunur. Değişmeyen akışlar yeniden indirilmez (ETag / Last-Modified).
+- Güncellenemeyen akışın yanında uyarı işareti; akış sayfasında son güncelleme ya da hata görünür.
+- Okurken "Okunacaklara Ekle" (⌘S). Her akışta en yeni 200 yazı tutulur; okunmuş yazılar ve kayıtlı kopyalar Ayarlar'da seçilen süre sonra silinir (varsayılan 30 gün).
+
+**Veri**
+- Kitaplık her gün kendiliğinden yedeklenir (son 10 gün, `Backups` klasörü). Ayarlar'dan yedek dışa aktarılır ve geri yüklenir.
+- OPML ile akış, HTML (Firefox, Chrome, Safari, Linkding) ile yer imi içe/dışa aktarma.
+
+**Tarayıcıdan kaydetme** — Firefox eklentisi (aşağıda) ya da Ayarlar'daki yer imcikleri. Ayrıca:
+- `okumalik://add?url=…&title=…&tags=a,b` — sonra oku
+- `okumalik://bookmark?url=…` — yer imi
+- `okumalik://feed?url=…` — akışa abone ol
 
 ## Firefox eklentisi
 
@@ -38,4 +53,4 @@ Xcode gerekmez; Command Line Tools yeterli.
 
 Defuddle `Resources/Vendor` klasöründe gelir (MIT lisansı); güncellemek için `scripts/update-defuddle.sh`.
 
-Veriler `~/Library/Application Support/Okumalik/library.json` dosyasında, yazıların kopyaları aynı yerdeki `Articles` klasöründe tutulur.
+Veriler `~/Library/Application Support/Okumalik/` klasöründe: kitaplık `library.json`, yazı kopyaları `Articles`, site simgeleri `Icons`, yedekler `Backups`. Testlerde `OKUMALIK_DATA_DIR` ortam değişkeni başka bir klasör gösterir.
