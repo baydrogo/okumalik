@@ -19,17 +19,15 @@ Xcode gerekmez; Command Line Tools yeterli.
 - **Yan panel** (⌥⌘I) — **Bilgi** sekmesinde site, yazar, yayın tarihi, uzunluk, okunan kısım, eklenme tarihi, adres, etiketler ve not; **Vurgular** sekmesinde sayfanın vurguları.
 - **Sütunlar** — kenar çubuğu ⌃⌘S ile gizlenir; Odak Modu (⇧⌘F) yalnızca yazıyı bırakır.
 - **Çevrimdışı kopya** — Okunacaklar'a eklenen ve okuma modunda açılan yazılar saklanır, anında ve internetsiz açılır. Yazı sitede değiştiyse "…" > "Yazıyı Siteden Yeniden Al".
-- **Vurgular ve notlar** — metni seçince beliren araç çubuğundan "Vurgula" (ya da ⇧⌘H). Vurguya tıklayınca ya da sağ tıklayınca kopyalanır, silinir; sağdaki panelden vurguya not eklenir. Bağlantılara "Düzenle…" ile not yazılır.
+- **Vurgular ve notlar** — metni seçince beliren araç çubuğundan "Vurgula" (ya da ⇧⌘H). Seçime "Not Ekle" (⇧⌘N) ile doğrudan not yazılır. Vurguya tıklayınca ya da sağ tıklayınca not eklenir, kopyalanır, silinir; notlu vurgular noktalı çizgiyle görünür. Bağlantılara "Düzenle…" ile not yazılır.
 - **Dışa aktarma** — yazının tamamı (başlık bilgileri, not ve vurgularla) ya da yalnızca vurgular Markdown olarak kopyalanır veya kaydedilir. Ayarlar'da Obsidian klasörü seçilirse "…" > "Obsidian'a Gönder" notu doğrudan kasaya yazar.
 
 **Kaydetme ve düzenleme**
 - **Yer İmleri** — Linkding tarzı tam genişlikte liste: site simgesi, başlık, etiketler, açıklama, tarih ve Aç · Düzenle · Okunacaklara Taşı · Sil. Başlığa tıklamak ya da çift tıklamak bağlantıyı tarayıcıda açar.
-- **Arama** — liste sütununun üstündeki kutu (⌥⌘F) tüm kitaplıkta başlık, özet, not, vurgu ve yazı içinde arar; `#etiket` etikete göre süzer.
-- **Notlar** — metni seçip "Not Ekle" (⇧⌘N) ya da bir vurguya tıklayıp not yazılır; notlu vurgular noktalı çizgiyle görünür.
 - **Etiketler** — okunacaklar, yer imleri ve akışlar etiketlenir; bir akışın etiketi yazılarını da kapsar. Sağ tık > "Etiketler"; listeyi başlıktaki # düğmesiyle süzme; Ayarlar > Etiketler'den yeniden adlandırma ve silme.
 - **Yinelenen kontrolü** — aynı sayfa (izleme parametreleri, `www.` ve sondaki `/` yok sayılarak) bir listeye ikinci kez eklenmez, başa taşınır; ekleme penceresi ve bildirim bunu söyler.
 - **Çoklu seçim** — ⌘ ya da ⇧ ile birden fazla satır seçip arşivleme, etiketleme, okundu sayma ya da silme.
-- **Arama** — başlık, adres, açıklama, etiket, not, vurgu ve kayıtlı yazının tam metninde.
+- **Arama** — liste sütununun üstündeki kutu (⌥⌘F) tüm kitaplıkta başlık, adres, açıklama, etiket, not, vurgu ve kayıtlı yazının tam metninde arar; `#etiket` etikete göre süzer.
 - **Çöp Kutusu ve geri alma** — silince alttaki bildirimde "Geri Al" ya da ⌘Z; silinenler ayrıca 30 gün Çöp Kutusu'nda kalır.
 
 **Akışlar**
