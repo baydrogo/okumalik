@@ -7,13 +7,15 @@ struct OkumalikApp: App {
     @AppStorage("readerMode") private var reader = true
     @AppStorage("readerSize") private var size = 19
     @AppStorage("compactList") private var compact = false
+    @AppStorage(AppAppearance.key) private var appearance = AppAppearance.system
 
     var body: some Scene {
         Window("Okumalık", id: "main") {
             ContentView()
                 .environmentObject(store)
                 .frame(minWidth: 960, minHeight: 580)
-                .tint(.okmAccent)
+                .tint(.okmTint)
+                .followsAppAppearance()
         }
         .windowToolbarStyle(.unifiedCompact(showsTitle: false))
         .commands {
@@ -25,6 +27,15 @@ struct OkumalikApp: App {
                     .keyboardShortcut("i", modifiers: [.command, .option])
                 Toggle("Sıkı Liste", isOn: $compact)
                     .keyboardShortcut("l", modifiers: [.command, .option])
+                Divider()
+                Picker("Uygulama Görünümü", selection: $appearance) {
+                    ForEach(AppAppearance.allCases) { Text($0.name).tag($0) }
+                }
+                Button("Açık ve Koyu Arasında Geç") {
+                    let dark = NSApp.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+                    appearance = dark ? .light : .dark
+                }
+                .keyboardShortcut("d", modifiers: [.command, .shift])
                 Divider()
             }
             CommandGroup(replacing: .newItem) {
@@ -54,6 +65,7 @@ struct OkumalikApp: App {
         Settings {
             SettingsView()
                 .environmentObject(store)
+                .followsAppAppearance()
         }
     }
 }

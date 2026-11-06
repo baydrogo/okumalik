@@ -39,6 +39,44 @@ enum ReaderFont: String, CaseIterable, Identifiable {
     }
 }
 
+/// Light or dark for the whole app: every window, menu and panel.
+enum AppAppearance: String, CaseIterable, Identifiable {
+    case system, light, dark
+    var id: Self { self }
+
+    static let key = "appAppearance"
+
+    var name: String {
+        switch self {
+        case .system: "Sistem"
+        case .light: "Açık"
+        case .dark: "Koyu"
+        }
+    }
+
+    /// nil follows macOS.
+    var nsAppearance: NSAppearance? {
+        switch self {
+        case .system: nil
+        case .light: NSAppearance(named: .aqua)
+        case .dark: NSAppearance(named: .darkAqua)
+        }
+    }
+}
+
+private struct AppearanceFollower: ViewModifier {
+    @AppStorage(AppAppearance.key) private var appearance = AppAppearance.system
+
+    func body(content: Content) -> some View {
+        content.onChange(of: appearance, initial: true) { NSApp.appearance = appearance.nsAppearance }
+    }
+}
+
+extension View {
+    /// Keeps the app's appearance in step with the setting while this view is on screen.
+    func followsAppAppearance() -> some View { modifier(AppearanceFollower()) }
+}
+
 enum ReaderTheme: String, CaseIterable, Identifiable {
     case auto, paper, white, sepia, night
     var id: Self { self }
@@ -50,7 +88,7 @@ enum ReaderTheme: String, CaseIterable, Identifiable {
 
     var name: String {
         switch self {
-        case .auto: "Sistem"
+        case .auto: "Otomatik"
         case .paper: "Kâğıt"
         case .white: "Beyaz"
         case .sepia: "Sepya"
@@ -73,9 +111,10 @@ struct ReaderStyle: Equatable {
     var font: ReaderFont
     var size: Int
     var theme: ReaderTheme
-    var systemDark: Bool
+    /// Whether the window is dark; decides what the "Otomatik" theme shows.
+    var windowDark: Bool
 
-    var palette: ReaderTheme.Palette { theme.palette(dark: systemDark) }
+    var palette: ReaderTheme.Palette { theme.palette(dark: windowDark) }
     var backgroundColor: NSColor { NSColor(hex: palette.bg) }
 
     /// Values of the page's `--okm-*` CSS variables.
@@ -115,8 +154,15 @@ extension NSColor {
 extension Color {
     init(hex: String) { self.init(nsColor: NSColor(hex: hex)) }
 
-    /// Calm blue used for accents throughout the app.
-    static let okmAccent = Color(red: 0.18, green: 0.42, blue: 0.85)
+    /// Calm blue behind controls such as switches and prominent buttons.
+    static let okmTint = Color(red: 0.18, green: 0.42, blue: 0.85)
+
+    /// The same blue for text and small marks, lighter on dark backgrounds to stay readable.
+    static let okmAccent = Color(nsColor: NSColor(name: nil) { appearance in
+        appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+            ? NSColor(srgbRed: 0.45, green: 0.66, blue: 1, alpha: 1)
+            : NSColor(srgbRed: 0.18, green: 0.42, blue: 0.85, alpha: 1)
+    })
 }
 
 extension Notification.Name {

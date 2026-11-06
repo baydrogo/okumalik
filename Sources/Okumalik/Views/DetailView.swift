@@ -53,7 +53,7 @@ struct DetailView: View {
     }
 
     private var style: ReaderStyle {
-        ReaderStyle(font: font, size: size, theme: theme, systemDark: colorScheme == .dark)
+        ReaderStyle(font: font, size: size, theme: theme, windowDark: colorScheme == .dark)
     }
 
     var body: some View {

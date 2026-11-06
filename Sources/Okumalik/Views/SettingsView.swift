@@ -9,6 +9,7 @@ struct SettingsView: View {
     @AppStorage(Store.copyRetentionKey) private var copyRetention = 30
     @AppStorage(Store.obsidianFolderKey) private var obsidianFolder = ""
     @AppStorage("compactList") private var compact = false
+    @AppStorage(AppAppearance.key) private var appearance = AppAppearance.system
     @State private var status: String?
     @State private var pendingRestore: Store.Snapshot?
 
@@ -21,6 +22,17 @@ struct SettingsView: View {
     var body: some View {
         TabView {
             tab {
+                Section {
+                    Picker("Uygulama", selection: $appearance) {
+                        ForEach(AppAppearance.allCases) { Text($0.name).tag($0) }
+                    }
+                    .pickerStyle(.segmented)
+                } header: {
+                    Text("Görünüm")
+                } footer: {
+                    Text("Okuma teması Otomatik ise yazı alanı da uygulamanın görünümünü izler. Kâğıt, Beyaz, Sepya ya da Gece seçiliyse o tema korunur.")
+                        .foregroundStyle(.secondary)
+                }
                 Section("Okuma") {
                     Toggle("Sayfaları okuma modunda aç", isOn: $reader)
                 }
