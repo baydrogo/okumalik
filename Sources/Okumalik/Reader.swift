@@ -52,7 +52,8 @@ enum ReaderScript {
         if (document.getElementById('okm-hl-style')) return;
         var s = document.createElement('style');
         s.id = 'okm-hl-style';
-        s.textContent = 'mark.okm-hl{background:var(--okm-hl,rgba(255,210,60,.55));color:inherit;border-radius:2px;padding:1px 0;cursor:pointer}';
+        s.textContent = 'mark.okm-hl{background:var(--okm-hl,rgba(255,210,60,.55));color:inherit;border-radius:2px;padding:1px 0;cursor:pointer}' +
+          'mark.okm-noted{border-bottom:1.5px dotted currentColor}';
         (document.head || document.documentElement).appendChild(s);
       },
       setStyle: function (o) {
@@ -128,6 +129,15 @@ enum ReaderScript {
         if (m) m.scrollIntoView({ block: 'center', behavior: 'smooth' });
       },
 
+      // Marks the highlights that have a note, and keeps the notes for the popup.
+      notes: {},
+      setNotes: function (notes) {
+        this.notes = notes;
+        document.querySelectorAll('mark.okm-hl').forEach(function (m) {
+          m.classList.toggle('okm-noted', !!notes[m.getAttribute('data-okm')]);
+        });
+      },
+
       // Floating toolbar over a selection or a highlight (Readwise-style).
       post: function (m) {
         try { window.webkit.messageHandlers.okm.postMessage(m); } catch (e) {}
@@ -135,6 +145,7 @@ enum ReaderScript {
       icons: {
         highlight: '<path d="M9.5 3.5l3 3L7 12H4V9z"/><path d="M3 14.5h10"/>',
         copy: '<rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 3.5v-.5a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h.5"/>',
+        note: '<path d="M2.5 3.5h11v7.5H7l-3 2.5V11H2.5z"/>',
         trash: '<path d="M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.7 9h5.6l.7-9"/>'
       },
       popup: function () {
@@ -143,22 +154,43 @@ enum ReaderScript {
         host.style.cssText = 'all:initial;position:fixed;left:0;top:0;z-index:2147483647;display:none';
         var root = host.attachShadow({ mode: 'closed' });
         root.innerHTML = '<style>' +
-          '.bar{display:flex;align-items:stretch;padding:3px;background:#26231F;border-radius:9px;' +
+          '.box{background:#26231F;border-radius:9px;max-width:340px;' +
           'box-shadow:0 8px 28px rgba(0,0,0,.28),0 0 0 .5px rgba(255,255,255,.1);' +
           'font:500 12.5px -apple-system,system-ui,sans-serif}' +
+          '.bar{display:flex;align-items:stretch;padding:3px}' +
+          '.text{padding:9px 12px 5px;color:#F4EFE6;font-weight:400;line-height:1.45;white-space:pre-wrap;max-height:130px;overflow:auto}' +
+          '.editor{padding:4px;width:310px}' +
+          'textarea{all:unset;display:block;box-sizing:border-box;width:100%;height:84px;padding:8px;color:#F4EFE6;font-weight:400;line-height:1.45;white-space:pre-wrap;overflow:auto}' +
+          'textarea::placeholder{color:rgba(244,239,230,.45)}' +
+          '.actions{display:flex;justify-content:flex-end;gap:2px}' +
           'button{all:unset;display:flex;align-items:center;gap:6px;padding:5px 10px;border-radius:6px;color:#F4EFE6;white-space:nowrap}' +
           'button:hover{background:rgba(255,255,255,.13)}button.danger:hover{background:#D64545}' +
           '.sep{width:1px;margin:5px 2px;background:rgba(255,255,255,.15)}' +
-          'svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.4;stroke-linecap:round;stroke-linejoin:round}</style><div class="bar"></div>';
-        // Keep the page selection when the toolbar is pressed.
-        host.addEventListener('mousedown', function (e) { e.preventDefault(); e.stopPropagation(); });
+          'svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.4;stroke-linecap:round;stroke-linejoin:round}</style>' +
+          '<div class="box"><div class="text"></div><div class="bar"></div><div class="editor">' +
+          '<textarea placeholder="Notunuzu yazın"></textarea><div class="actions">' +
+          '<button class="cancel">Vazgeç</button><button class="save">Kaydet</button></div></div></div>';
+        var self = this;
+        // Keep the page selection when the toolbar is pressed; the note field needs the press itself.
+        host.addEventListener('mousedown', function (e) { if (!self.editing) e.preventDefault(); e.stopPropagation(); });
         document.documentElement.appendChild(host);
-        this.ui = { host: host, bar: root.querySelector('.bar') };
+        this.ui = { host: host, bar: root.querySelector('.bar'), text: root.querySelector('.text'),
+                    editor: root.querySelector('.editor'), area: root.querySelector('textarea') };
+        root.querySelector('.save').addEventListener('click', function (e) { e.stopPropagation(); self.commitNote(); });
+        root.querySelector('.cancel').addEventListener('click', function (e) { e.stopPropagation(); self.cancelNote(); });
+        this.ui.area.addEventListener('keydown', function (e) {
+          if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); self.cancelNote(); }
+          if (e.key === 'Enter' && e.metaKey) { e.preventDefault(); e.stopPropagation(); self.commitNote(); }
+        });
         return this.ui;
       },
-      show: function (rect, buttons) {
+      show: function (rect, buttons, note) {
         var ui = this.popup(), self = this;
         ui.bar.innerHTML = '';
+        ui.bar.style.display = 'flex';
+        ui.editor.style.display = 'none';
+        ui.text.style.display = note ? 'block' : 'none';
+        ui.text.textContent = note || '';
         buttons.forEach(function (b, i) {
           if (i) { var s = document.createElement('span'); s.className = 'sep'; ui.bar.appendChild(s); }
           var el = document.createElement('button');
@@ -168,7 +200,10 @@ enum ReaderScript {
           el.addEventListener('click', function (e) { e.stopPropagation(); self.hide(); b.run(); });
           ui.bar.appendChild(el);
         });
-        var h = ui.host;
+        this.place(rect);
+      },
+      place: function (rect) {
+        var h = this.ui.host;
         h.style.visibility = 'hidden';
         h.style.display = 'block';
         var w = h.offsetWidth, ht = h.offsetHeight, vw = document.documentElement.clientWidth;
@@ -180,7 +215,38 @@ enum ReaderScript {
         h.style.visibility = 'visible';
       },
       hide: function () {
-        if (this.ui) this.ui.host.style.display = 'none';
+        if (this.ui && !this.editing) this.ui.host.style.display = 'none';
+      },
+      // The note editor stays open while scrolling and keeps what was typed when clicking elsewhere.
+      editing: null,
+      noteEditor: function (id, text, isNew) {
+        var ui = this.popup();
+        this.editing = { id: id, original: text || '', isNew: !!isNew };
+        ui.bar.style.display = 'none';
+        ui.text.style.display = 'none';
+        ui.editor.style.display = 'block';
+        ui.area.value = text || '';
+        this.place(this.markRect(id));
+        ui.area.focus();
+        ui.area.setSelectionRange(ui.area.value.length, ui.area.value.length);
+      },
+      closeNote: function () {
+        var e = this.editing;
+        this.editing = null;
+        this.ui.area.blur();
+        this.hide();
+        return e;
+      },
+      commitNote: function () {
+        if (!this.editing) return;
+        var text = this.ui.area.value.trim(), e = this.closeNote();
+        if (e.isNew && !text) this.post({ action: 'discard', id: e.id });
+        else if (text !== e.original) this.post({ action: 'note', id: e.id, text: text });
+      },
+      cancelNote: function () {
+        if (!this.editing) return;
+        var e = this.closeNote();
+        if (e.isNew) this.post({ action: 'discard', id: e.id });
       },
       markRect: function (id) {
         var l = Infinity, t = Infinity, r = -Infinity, b = -Infinity;
@@ -194,12 +260,14 @@ enum ReaderScript {
         return !!this.ui && e.composedPath().indexOf(this.ui.host) >= 0;
       },
       onMouseUp: function (e) {
+        if (this.editing) return;
         var self = this, sel = window.getSelection();
         var a = document.activeElement;
         if (a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA' || a.isContentEditable)) return;
         if (sel && !sel.isCollapsed && sel.rangeCount && sel.toString().trim()) {
           this.show(sel.getRangeAt(0).getBoundingClientRect(), [
             { icon: 'highlight', label: 'Vurgula', run: function () { self.post({ action: 'highlight' }); } },
+            { icon: 'note', label: 'Not Ekle', run: function () { self.post({ action: 'highlight', note: true }); } },
             { icon: 'copy', label: 'Kopyala', run: function () { self.post({ action: 'copy', text: sel.toString() }); } }
           ]);
           return;
@@ -207,11 +275,12 @@ enum ReaderScript {
         var t = e.target && e.target.closest ? e.target : e.target && e.target.parentElement;
         var m = t && t.closest('mark.okm-hl');
         if (!m || t.closest('a')) return;
-        var id = m.getAttribute('data-okm');
+        var id = m.getAttribute('data-okm'), note = this.notes[id];
         this.show(this.markRect(id), [
+          { icon: 'note', label: note ? 'Notu Düzenle' : 'Not Ekle', run: function () { self.noteEditor(id, note, false); } },
           { icon: 'copy', label: 'Kopyala', run: function () { self.post({ action: 'copyHighlight', id: id }); } },
           { icon: 'trash', label: 'Sil', danger: true, run: function () { self.post({ action: 'delete', id: id }); } }
-        ]);
+        ], note);
       },
       // Pictures in the reader open enlarged over the article instead of replacing it.
       imageLink: /\.(jpe?g|png|gif|webp|avif|svg)(\?|#|$)/i,
@@ -261,7 +330,11 @@ enum ReaderScript {
       init: function () {
         var self = this;
         document.addEventListener('click', function (e) { self.onClick(e); }, true);
-        document.addEventListener('mousedown', function (e) { if (!self.inPopup(e)) self.hide(); }, true);
+        document.addEventListener('mousedown', function (e) {
+          if (self.inPopup(e)) return;
+          self.commitNote();
+          self.hide();
+        }, true);
         document.addEventListener('mouseup', function (e) {
           if (e.button !== 0 || self.inPopup(e)) return;
           setTimeout(function () { self.onMouseUp(e); }, 0);

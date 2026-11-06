@@ -28,9 +28,8 @@ struct ContentView: View {
 
     var body: some View {
         split
-            .searchable(text: $search, placement: .sidebar, prompt: "Ara")
             .sheet(isPresented: $store.showAddSheet) {
-                AddSheet(initialKind: addKind, initialTags: currentTag.map { [$0] } ?? [])
+                AddSheet(initialKind: addKind)
             }
             .alert("Yeni Etiket", isPresented: Binding(get: { !store.tagPrompt.isEmpty }, set: { if !$0 { store.tagPrompt = [] } })) {
                 TextField("Etiket", text: $newTag)
@@ -42,31 +41,43 @@ struct ContentView: View {
             }
             .overlay(alignment: .bottom) { toast }
             .onChange(of: section) { selection = [] }
+            // A search result opened from Yer İmleri brought the reading pane; back to the plain list.
+            .onChange(of: search) { if search.isEmpty, section == .bookmarks { selection = [] } }
             .onChange(of: selection) {
                 if case .entry(let id) = single { store.setEntryRead(id, true) }
             }
             .onOpenURL { store.handleOpenURL($0) }
             .onAppear { store.undoManager = undoManager }
             .onChange(of: undoManager) { store.undoManager = undoManager }
+            .onReceive(NotificationCenter.default.publisher(for: .okmSearch)) { _ in
+                if columns == "detail" { columns = "all" }
+            }
             .onReceive(NotificationCenter.default.publisher(for: .okmFocus)) { _ in
                 withAnimation { columns = columns == "detail" ? "all" : "detail" }
             }
     }
 
+    /// A row in the list that needs the reading pane: anything but a bookmark.
+    private var opensPage: Bool {
+        guard let single else { return false }
+        if case .item(let id) = single { return store.item(id)?.kind != .bookmark }
+        return true
+    }
+
     /// Bookmarks need no preview: their list takes the whole width next to the sidebar.
     @ViewBuilder
     private var split: some View {
-        if section == .bookmarks {
+        if section == .bookmarks, !opensPage {
             NavigationSplitView(columnVisibility: visibility) {
                 sidebar
             } detail: {
-                ItemListView(section: .bookmarks, selection: $selection, search: search)
+                ItemListView(section: .bookmarks, selection: $selection, search: $search)
             }
         } else {
             NavigationSplitView(columnVisibility: visibility) {
                 sidebar
             } content: {
-                ItemListView(section: section ?? .readLater, selection: $selection, search: search)
+                ItemListView(section: section ?? .readLater, selection: $selection, search: $search)
                     .navigationSplitViewColumnWidth(min: 280, ideal: 340, max: 480)
             } detail: {
                 DetailView(selection: single)
@@ -100,10 +111,6 @@ struct ContentView: View {
                 .transition(.move(edge: .bottom).combined(with: .opacity))
                 .animation(.easeOut(duration: 0.2), value: message.id)
         }
-    }
-
-    private var currentTag: String? {
-        if case .tag(let tag) = section { tag } else { nil }
     }
 
     private var addKind: AddKind {

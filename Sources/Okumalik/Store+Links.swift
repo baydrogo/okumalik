@@ -245,12 +245,18 @@ extension Store {
     /// A saved link's own texts match, or its address is among `hits`
     /// (pages whose highlights or offline article match, found separately).
     func matches(_ item: SavedItem, _ query: String, hits: Set<URL>) -> Bool {
+        if let tag = Self.tagQuery(query) { return item.tags.contains(tag) }
         if hits.contains(item.url) { return true }
         return item.title.localizedStandardContains(query)
             || item.excerpt.localizedStandardContains(query)
             || item.url.absoluteString.localizedStandardContains(query)
             || (item.note ?? "").localizedStandardContains(query)
             || item.tags.contains { $0.localizedStandardContains(query) }
+    }
+
+    /// The tag asked for when the search starts with "#".
+    static func tagQuery(_ query: String) -> String? {
+        query.hasPrefix("#") ? normalizedTag(query) : nil
     }
 
     /// Addresses of pages with a highlight matching the query.

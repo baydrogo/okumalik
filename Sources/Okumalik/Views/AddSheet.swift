@@ -4,7 +4,6 @@ struct AddSheet: View {
     @EnvironmentObject private var store: Store
     @Environment(\.dismiss) private var dismiss
     let initialKind: AddKind
-    var initialTags: [String] = []
 
     @State private var urlText = ""
     @State private var kind: AddKind = .readLater
@@ -49,7 +48,6 @@ struct AddSheet: View {
         .frame(width: 440)
         .onAppear {
             kind = initialKind
-            tags = initialTags
             if let clip = NSPasteboard.general.string(forType: .string)?.trimmingCharacters(in: .whitespacesAndNewlines),
                clip.hasPrefix("http"), !clip.contains(" ") {
                 urlText = clip

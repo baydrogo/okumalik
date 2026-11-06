@@ -181,7 +181,9 @@ enum RelativeDate {
 
 extension Notification.Name {
     static let okmHighlight = Notification.Name("okmHighlight")
+    static let okmNote = Notification.Name("okmNote")
     static let okmFind = Notification.Name("okmFind")
+    static let okmSearch = Notification.Name("okmSearch")
     static let okmPanel = Notification.Name("okmPanel")
     static let okmFocus = Notification.Name("okmFocus")
 }

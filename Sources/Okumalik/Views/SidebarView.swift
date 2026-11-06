@@ -6,13 +6,9 @@ struct SidebarView: View {
     @State private var renaming: Feed?
     @State private var removing: Feed?
     @State private var newName = ""
-    @State private var renamingTag: String?
-    @State private var deletingTag: String?
-    @State private var dropTarget: String?
 
     var body: some View {
         let unread = store.unreadByFeed
-        let tagCounts = store.tagCounts
         List(selection: $selection) {
             Section("Kitaplık") {
                 Label("Okunacaklar", systemImage: "tray")
@@ -50,7 +46,6 @@ struct SidebarView: View {
                     }
                     .badge(unread[feed.id] ?? 0)
                     .tag(SidebarSection.feed(feed.id))
-                    .draggable(TagTarget.feed(feed.id).dragToken)
                     .contextMenu {
                         Button("Tümünü Okundu Say") { store.markAllRead(feed: feed.id) }
                         Button("Yeniden Adlandır…") { newName = feed.title; renaming = feed }
@@ -65,48 +60,12 @@ struct SidebarView: View {
                 }
             }
 
-            let tags = tagCounts.keys.sorted { $0.localizedStandardCompare($1) == .orderedAscending }
-            if !tags.isEmpty {
-                Section("Etiketler") {
-                    ForEach(tags, id: \.self) { tag in
-                        Label(tag, systemImage: "number")
-                            .badge(tagCounts[tag] ?? 0)
-                            .tag(SidebarSection.tag(tag))
-                            .background(
-                                RoundedRectangle(cornerRadius: 5)
-                                    .fill(Color.okmAccent.opacity(dropTarget == tag ? 0.22 : 0))
-                                    .padding(.horizontal, -6)
-                                    .padding(.vertical, -3)
-                            )
-                            .dropDestination(for: String.self) { tokens, _ in
-                                let targets = tokens.compactMap(TagTarget.init(dragToken:))
-                                targets.forEach { store.addTag(tag, to: $0) }
-                                return !targets.isEmpty
-                            } isTargeted: { over in
-                                dropTarget = over ? tag : (dropTarget == tag ? nil : dropTarget)
-                            }
-                            .contextMenu {
-                                Button("Yeniden Adlandır…") { newName = tag; renamingTag = tag }
-                                Button("Etiketi Sil…", role: .destructive) { deletingTag = tag }
-                            }
-                    }
-                }
-            }
         }
         .listStyle(.sidebar)
         .safeAreaInset(edge: .bottom, spacing: 0) { bottomBar }
         .alert("Akışı Yeniden Adlandır", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
             TextField("Ad", text: $newName)
             Button("Kaydet") { if let feed = renaming { store.renameFeed(feed.id, to: newName) } }
-            Button("Vazgeç", role: .cancel) {}
-        }
-        .alert("Etiketi Yeniden Adlandır", isPresented: Binding(get: { renamingTag != nil }, set: { if !$0 { renamingTag = nil } })) {
-            TextField("Ad", text: $newName)
-            Button("Kaydet") {
-                guard let old = renamingTag, let new = Store.normalizedTag(newName) else { return }
-                store.renameTag(old, to: new)
-                if selection == .tag(old) { selection = .tag(new) }
-            }
             Button("Vazgeç", role: .cancel) {}
         }
         .confirmationDialog(
@@ -120,18 +79,6 @@ struct SidebarView: View {
             }
         } message: {
             Text("Akışın yazıları da silinir. Okunacaklar'a ya da Yer İmleri'ne kaydettikleriniz kalır.")
-        }
-        .confirmationDialog(
-            "“#\(deletingTag ?? "")” etiketi silinsin mi?",
-            isPresented: Binding(get: { deletingTag != nil }, set: { if !$0 { deletingTag = nil } })
-        ) {
-            Button("Etiketi Sil", role: .destructive) {
-                guard let tag = deletingTag else { return }
-                if selection == .tag(tag) { selection = .readLater }
-                store.deleteTag(tag)
-            }
-        } message: {
-            Text("Bağlantılar ve akışlar silinmez, yalnızca bu etiket kaldırılır.")
         }
     }
 

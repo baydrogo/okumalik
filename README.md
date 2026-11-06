@@ -24,7 +24,9 @@ Xcode gerekmez; Command Line Tools yeterli.
 
 **Kaydetme ve düzenleme**
 - **Yer İmleri** — Linkding tarzı tam genişlikte liste: site simgesi, başlık, etiketler, açıklama, tarih ve Aç · Düzenle · Okunacaklara Taşı · Sil. Başlığa tıklamak ya da çift tıklamak bağlantıyı tarayıcıda açar.
-- **Etiketler** — okunacaklar, yer imleri ve akışlar etiketlenir; bir akışın etiketi yazılarını da kapsar. Sağ tık > "Etiketler", sürükle-bırak ya da liste başındaki etiket şeridi. Kenar çubuğundan yeniden adlandırma ve silme.
+- **Arama** — liste sütununun üstündeki kutu (⌥⌘F) tüm kitaplıkta başlık, özet, not, vurgu ve yazı içinde arar; `#etiket` etikete göre süzer.
+- **Notlar** — metni seçip "Not Ekle" (⇧⌘N) ya da bir vurguya tıklayıp not yazılır; notlu vurgular noktalı çizgiyle görünür.
+- **Etiketler** — okunacaklar, yer imleri ve akışlar etiketlenir; bir akışın etiketi yazılarını da kapsar. Sağ tık > "Etiketler"; listeyi başlıktaki # düğmesiyle süzme; Ayarlar > Etiketler'den yeniden adlandırma ve silme.
 - **Yinelenen kontrolü** — aynı sayfa (izleme parametreleri, `www.` ve sondaki `/` yok sayılarak) bir listeye ikinci kez eklenmez, başa taşınır; ekleme penceresi ve bildirim bunu söyler.
 - **Çoklu seçim** — ⌘ ya da ⇧ ile birden fazla satır seçip arşivleme, etiketleme, okundu sayma ya da silme.
 - **Arama** — başlık, adres, açıklama, etiket, not, vurgu ve kayıtlı yazının tam metninde.

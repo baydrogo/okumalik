@@ -56,6 +56,10 @@ struct OkumalikApp: App {
                 Divider()
                 Button("Seçili Metni Vurgula") { NotificationCenter.default.post(name: .okmHighlight, object: nil) }
                     .keyboardShortcut("h", modifiers: [.command, .shift])
+                Button("Seçili Metne Not Ekle") { NotificationCenter.default.post(name: .okmNote, object: nil) }
+                    .keyboardShortcut("n", modifiers: [.command, .shift])
+                Button("Kitaplıkta Ara") { NotificationCenter.default.post(name: .okmSearch, object: nil) }
+                    .keyboardShortcut("f", modifiers: [.command, .option])
                 Button("Sayfada Bul…") { NotificationCenter.default.post(name: .okmFind, object: nil) }
                     .keyboardShortcut("f")
                 Divider()

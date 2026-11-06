@@ -77,6 +77,7 @@ struct DetailView: View {
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .okmHighlight)) { _ in proxy.highlight() }
+        .onReceive(NotificationCenter.default.publisher(for: .okmNote)) { _ in proxy.addNote() }
         .onReceive(NotificationCenter.default.publisher(for: .okmPanel)) { _ in showPanel.toggle() }
         .onReceive(NotificationCenter.default.publisher(for: .okmFind)) { _ in
             guard subject != nil else { return }
@@ -114,6 +115,10 @@ struct DetailView: View {
             store.addHighlight(id: id, url: url, title: title, text: text)
         } onDelete: { id in
             store.deleteHighlight(id)
+        } onNote: { id, note in
+            store.setHighlightNote(id, note)
+        } onDiscard: { id in
+            store.discardHighlight(id)
         } onProgress: { value in
             store.setPosition(value, for: url)
         } onScrollDirection: { down in

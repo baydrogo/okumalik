@@ -14,7 +14,7 @@ struct HighlightsPanel: View {
         VStack(alignment: .leading, spacing: 0) {
             if list.isEmpty {
                 Spacer()
-                Text("Metni seçip ⇧⌘H’ye basın ya da sağ tıklayıp “Vurgula”yı seçin.")
+                Text("Metni seçip açılan menüden vurgulayın ya da not ekleyin.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)

@@ -11,6 +11,11 @@ extension Store {
         highlights.append(Highlight(id: id, url: url, pageTitle: title, text: text))
     }
 
+    /// Removes a highlight outright, without going through the trash.
+    func discardHighlight(_ id: UUID) {
+        highlights.removeAll { $0.id == id }
+    }
+
     /// Highlights grouped by page, most recently highlighted page first.
     func highlightGroups(matching filter: (Highlight) -> Bool = { _ in true }) -> [(url: URL, title: String, items: [Highlight])] {
         Dictionary(grouping: highlights.filter(filter), by: \.url)

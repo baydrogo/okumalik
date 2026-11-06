@@ -12,6 +12,9 @@ struct SettingsView: View {
     @AppStorage(AppAppearance.key) private var appearance = AppAppearance.system
     @State private var status: String?
     @State private var pendingRestore: Store.Snapshot?
+    @State private var renamingTag: String?
+    @State private var deletingTag: String?
+    @State private var newTagName = ""
 
     private static let bookmarklets: [(String, String)] = [
         ("Sonra Oku", "add"),
@@ -41,6 +44,9 @@ struct SettingsView: View {
                 }
             }
             .tabItem { Label("Genel", systemImage: "gearshape") }
+
+            tagsTab
+                .tabItem { Label("Etiketler", systemImage: "number") }
 
             tab {
                 Section {
@@ -135,6 +141,48 @@ struct SettingsView: View {
             }
         }
         .frame(width: 500)
+    }
+
+    /// Tags can be many, so this tab scrolls at a fixed height.
+    private var tagsTab: some View {
+        let counts = store.tagCounts
+        return Form {
+            Section {
+                if counts.isEmpty {
+                    Text("Henüz etiket yok.").foregroundStyle(.secondary)
+                }
+                ForEach(store.allTags, id: \.self) { tag in
+                    LabeledContent {
+                        HStack(spacing: 10) {
+                            Text("\(counts[tag] ?? 0)").foregroundStyle(.secondary).monospacedDigit()
+                            Button { newTagName = tag; renamingTag = tag } label: { Image(systemName: "pencil") }
+                                .help("Yeniden adlandır")
+                            Button { deletingTag = tag } label: { Image(systemName: "trash") }
+                                .help("Sil")
+                        }
+                        .buttonStyle(.borderless)
+                    } label: {
+                        Text("#" + tag).lineLimit(1)
+                    }
+                }
+            } footer: {
+                Text("Sayılar, etiketi taşıyan bağlantı ve akış sayısıdır. Listeyi etikete göre süzmek için başlıktaki # düğmesini kullanın ya da aramaya #etiket yazın.")
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .formStyle(.grouped)
+        .frame(height: 420)
+        .alert("Etiketi Yeniden Adlandır", isPresented: Binding(get: { renamingTag != nil }, set: { if !$0 { renamingTag = nil } })) {
+            TextField("Ad", text: $newTagName)
+            Button("Kaydet") { if let old = renamingTag { store.renameTag(old, to: newTagName) } }
+            Button("Vazgeç", role: .cancel) {}
+        }
+        .confirmationDialog("“#\(deletingTag ?? "")” etiketi silinsin mi?",
+                            isPresented: Binding(get: { deletingTag != nil }, set: { if !$0 { deletingTag = nil } })) {
+            Button("Etiketi Sil", role: .destructive) { if let tag = deletingTag { store.deleteTag(tag) } }
+        } message: {
+            Text("Bağlantılar ve akışlar silinmez, yalnızca bu etiket kaldırılır.")
+        }
     }
 
     /// One settings tab: a grouped form sized to its content, with the last action's result below.

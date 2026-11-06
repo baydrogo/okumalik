@@ -107,30 +107,12 @@ extension ArticleInfo {
 enum SidebarSection: Hashable {
     case readLater, archive, bookmarks, highlights, trash, allFeeds
     case feed(UUID)
-    case tag(String)
 }
 
-/// Something that can carry tags; also the payload of in-app drags ("okumalik-item:<id>").
+/// Something that can carry tags.
 enum TagTarget: Hashable {
     case item(UUID)
     case feed(UUID)
-
-    var dragToken: String {
-        switch self {
-        case .item(let id): "okumalik-item:\(id.uuidString)"
-        case .feed(let id): "okumalik-feed:\(id.uuidString)"
-        }
-    }
-
-    init?(dragToken: String) {
-        let parts = dragToken.split(separator: ":", maxSplits: 1).map(String.init)
-        guard parts.count == 2, let id = UUID(uuidString: parts[1]) else { return nil }
-        switch parts[0] {
-        case "okumalik-item": self = .item(id)
-        case "okumalik-feed": self = .feed(id)
-        default: return nil
-        }
-    }
 }
 
 enum DetailID: Hashable {

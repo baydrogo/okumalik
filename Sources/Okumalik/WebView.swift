@@ -5,6 +5,7 @@ import WebKit
 final class ReaderProxy: ObservableObject {
     weak var coordinator: WebView.Coordinator?
     func highlight() { coordinator?.highlightSelection() }
+    func addNote() { coordinator?.highlightSelection(withNote: true) }
     func scroll(to id: UUID) { coordinator?.scroll(to: id) }
     func refetch() { coordinator?.refetch() }
 
@@ -54,8 +55,11 @@ final class ReaderWebView: WKWebView {
         var extra: [NSMenuItem] = []
         if menu.items.contains(where: { $0.identifier?.rawValue == "WKMenuItemIdentifierCopy" }) {
             extra.append(item("Vurgula", #selector(highlightFromMenu)))
+            extra.append(item("Not Ekle", #selector(noteFromMenu)))
         }
         if let id = coordinator?.menuHighlight {
+            let noted = coordinator?.hasNote(id) == true
+            extra.append(item(noted ? "Notu Düzenle" : "Not Ekle", #selector(editNoteFromMenu), id))
             extra.append(item("Vurguyu Kopyala", #selector(copyHighlightFromMenu), id))
             extra.append(item("Vurguyu Sil", #selector(deleteHighlightFromMenu), id))
         }
@@ -78,6 +82,12 @@ final class ReaderWebView: WKWebView {
 
     @objc private func highlightFromMenu() { coordinator?.highlightSelection() }
 
+    @objc private func noteFromMenu() { coordinator?.highlightSelection(withNote: true) }
+
+    @objc private func editNoteFromMenu(_ sender: NSMenuItem) {
+        (sender.representedObject as? UUID).map { coordinator?.editNote($0) }
+    }
+
     @objc private func copyHighlightFromMenu(_ sender: NSMenuItem) {
         (sender.representedObject as? UUID).map { coordinator?.copyHighlight($0) }
     }
@@ -99,6 +109,10 @@ struct WebView: NSViewRepresentable {
     var position: Double? = nil
     let onHighlight: (UUID, String) -> Void
     let onDelete: (UUID) -> Void
+    /// A note was written for a highlight; empty removes it.
+    let onNote: (UUID, String) -> Void
+    /// A highlight made only to carry a note, whose note was given up.
+    let onDiscard: (UUID) -> Void
     var onProgress: ((Double) -> Void)? = nil
     /// Called when scrolling turns down (true) or up (false).
     var onScrollDirection: ((Bool) -> Void)? = nil
@@ -170,6 +184,7 @@ struct WebView: NSViewRepresentable {
         var wantsReader = false
         var style: ReaderStyle
         var knownIDs = Set<UUID>()
+        private var knownNotes: [UUID: String] = [:]
         var pendingFocus: UUID?
         var lastFocus: UUID?
         /// The highlight under the pointer when the context menu was requested.
@@ -304,7 +319,8 @@ struct WebView: NSViewRepresentable {
 
         // MARK: Highlights
 
-        func highlightSelection() {
+        /// Highlights the selection; with a note, opens the note editor on it right away.
+        func highlightSelection(withNote: Bool = false) {
             let id = UUID()
             run("window.__okm.add('\(id.uuidString)')") { [weak self] result in
                 guard let self, let text = result as? String, !text.isEmpty else {
@@ -313,7 +329,30 @@ struct WebView: NSViewRepresentable {
                 }
                 self.knownIDs.insert(id)
                 self.parent.onHighlight(id, text)
+                if withNote { self.openNoteEditor(id, text: "", isNew: true) }
             }
+        }
+
+        func hasNote(_ id: UUID) -> Bool { knownNotes[id] != nil }
+
+        func editNote(_ id: UUID) {
+            openNoteEditor(id, text: knownNotes[id] ?? "", isNew: false)
+        }
+
+        private func openNoteEditor(_ id: UUID, text: String, isNew: Bool) {
+            guard let data = try? JSONSerialization.data(withJSONObject: text, options: .fragmentsAllowed) else { return }
+            run("window.__okm.noteEditor('\(id.uuidString)', \(String(decoding: data, as: UTF8.self)), \(isNew)); true")
+        }
+
+        /// Tells the page which highlights have notes, when that has changed.
+        private func pushNotes(force: Bool = false) {
+            var notes: [UUID: String] = [:]
+            for h in parent.highlights { if let note = h.note { notes[h.id] = note } }
+            guard force || notes != knownNotes else { return }
+            knownNotes = notes
+            let payload = Dictionary(uniqueKeysWithValues: notes.map { ($0.key.uuidString, $0.value) })
+            guard let data = try? JSONSerialization.data(withJSONObject: payload) else { return }
+            run("window.__okm.setNotes(\(String(decoding: data, as: UTF8.self))); true")
         }
 
         func copyHighlight(_ id: UUID) {
@@ -327,10 +366,11 @@ struct WebView: NSViewRepresentable {
         private func restoreHighlights() {
             let list = parent.highlights
             knownIDs = Set(list.map(\.id))
-            guard !list.isEmpty else { return }
+            guard !list.isEmpty else { return pushNotes(force: true) }
             let payload = list.map { ["id": $0.id.uuidString, "text": $0.text] }
             guard let data = try? JSONSerialization.data(withJSONObject: payload) else { return }
             run("window.__okm.restore(\(String(decoding: data, as: UTF8.self))); true") { [weak self] _ in
+                self?.pushNotes(force: true)
                 guard let self, let id = self.pendingFocus else { return }
                 self.pendingFocus = nil
                 self.scroll(to: id)
@@ -344,7 +384,7 @@ struct WebView: NSViewRepresentable {
             }
             let added = !current.subtracting(knownIDs).isEmpty
             knownIDs = current
-            if added { restoreHighlights() }
+            if added { restoreHighlights() } else { pushNotes() }
         }
 
         func scroll(to id: UUID) {
@@ -380,7 +420,9 @@ struct WebView: NSViewRepresentable {
             guard let body = body as? [String: Any], let action = body["action"] as? String else { return }
             let id = (body["id"] as? String).flatMap(UUID.init(uuidString:))
             switch action {
-            case "highlight": highlightSelection()
+            case "highlight": highlightSelection(withNote: (body["note"] as? Bool) ?? false)
+            case "note": if let id { parent.onNote(id, (body["text"] as? String) ?? "") }
+            case "discard": id.map(parent.onDiscard)
             case "copy": (body["text"] as? String).map(Actions.copyText)
             case "copyHighlight": id.map(copyHighlight)
             case "delete": id.map(deleteHighlight)
