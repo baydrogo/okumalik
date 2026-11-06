@@ -15,7 +15,15 @@ extension Store {
         Array(Set(tags.compactMap(normalizedTag))).sorted { $0.localizedStandardCompare($1) == .orderedAscending }
     }
 
-    var allTags: [String] { Self.cleanTags(items.flatMap(\.tags) + feeds.flatMap(\.tags)) }
+    var allTags: [String] { tagCounts.keys.sorted { $0.localizedStandardCompare($1) == .orderedAscending } }
+
+    /// How many saved links and subscriptions carry each tag.
+    var tagCounts: [String: Int] {
+        var counts: [String: Int] = [:]
+        for item in items { for tag in item.tags { counts[tag, default: 0] += 1 } }
+        for feed in feeds { for tag in feed.tags { counts[tag, default: 0] += 1 } }
+        return counts
+    }
 
     func tags(of target: TagTarget) -> [String] {
         switch target {
@@ -40,11 +48,6 @@ extension Store {
     func toggleTag(_ tag: String, on target: TagTarget) {
         let current = tags(of: target)
         setTags(current.contains(tag) ? current.filter { $0 != tag } : current + [tag], on: target)
-    }
-
-    /// Saved links plus subscriptions carrying the tag.
-    func tagCount(_ tag: String) -> Int {
-        items.filter { $0.tags.contains(tag) }.count + feeds.filter { $0.tags.contains(tag) }.count
     }
 
     func renameTag(_ old: String, to new: String) {

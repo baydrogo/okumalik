@@ -11,6 +11,8 @@ struct SidebarView: View {
     @State private var dropTarget: String?
 
     var body: some View {
+        let unread = store.unreadByFeed
+        let tagCounts = store.tagCounts
         List(selection: $selection) {
             Section("Kitaplık") {
                 Label("Okunacaklar", systemImage: "tray")
@@ -28,7 +30,7 @@ struct SidebarView: View {
 
             Section("Akışlar") {
                 Label("Tümü", systemImage: "circle.grid.2x2")
-                    .badge(store.unreadCount(feed: nil))
+                    .badge(unread.values.reduce(0, +))
                     .tag(SidebarSection.allFeeds)
                 ForEach(store.feeds) { feed in
                     Label {
@@ -46,7 +48,7 @@ struct SidebarView: View {
                             Circle().fill(.tertiary).frame(width: 5, height: 5)
                         }
                     }
-                    .badge(store.unreadCount(feed: feed.id))
+                    .badge(unread[feed.id] ?? 0)
                     .tag(SidebarSection.feed(feed.id))
                     .draggable(TagTarget.feed(feed.id).dragToken)
                     .contextMenu {
@@ -63,12 +65,12 @@ struct SidebarView: View {
                 }
             }
 
-            let tags = store.allTags
+            let tags = tagCounts.keys.sorted { $0.localizedStandardCompare($1) == .orderedAscending }
             if !tags.isEmpty {
                 Section("Etiketler") {
                     ForEach(tags, id: \.self) { tag in
                         Label(tag, systemImage: "number")
-                            .badge(store.tagCount(tag))
+                            .badge(tagCounts[tag] ?? 0)
                             .tag(SidebarSection.tag(tag))
                             .background(
                                 RoundedRectangle(cornerRadius: 5)

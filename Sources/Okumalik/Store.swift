@@ -4,9 +4,21 @@ import Foundation
 /// The whole library, kept in memory and saved as one JSON file.
 @MainActor
 final class Store: ObservableObject {
-    @Published var items: [SavedItem] = [] { didSet { scheduleSave() } }
+    @Published var items: [SavedItem] = [] {
+        didSet {
+            itemIndex = nil
+            queuedKeys = nil
+            itemsVersion &+= 1
+            scheduleSave()
+        }
+    }
     @Published var feeds: [Feed] = [] { didSet { scheduleSave() } }
-    @Published var entries: [FeedEntry] = [] { didSet { scheduleSave() } }
+    @Published var entries: [FeedEntry] = [] {
+        didSet {
+            entryIndex = nil
+            scheduleSave()
+        }
+    }
     @Published var highlights: [Highlight] = [] { didSet { scheduleSave() } }
     /// Deleted links and highlights, kept for `trashDays` days.
     @Published var trash: [SavedItem] = [] { didSet { scheduleSave() } }
@@ -33,14 +45,31 @@ final class Store: ObservableObject {
 
     static let trashDays = 30
     private var loaded = false
+    /// Changes with every change to `items`, so lists can tell whether their results still hold.
+    private(set) var itemsVersion = 0
+    // Worked out when first asked after a change, so each visible row finds its data at once.
+    private var itemIndex: [UUID: Int]?
+    private var entryIndex: [String: Int]?
+    private var queuedKeys: Set<String>?
+    private var dedupeKeys: [URL: String] = [:]
     private var saveTask: Task<Void, Never>?
+    /// Library writes run here, in order, so a large library never holds up the window.
+    private static let saveQueue = DispatchQueue(label: "okumalik.save", qos: .utility)
     private var toastTask: Task<Void, Never>?
 
     /// ~/Library/Application Support/Okumalik, or OKUMALIK_DATA_DIR when set (for tests).
-    static let dataDirectory: URL = {
+    nonisolated static let dataDirectory: URL = {
         let dir = ProcessInfo.processInfo.environment["OKUMALIK_DATA_DIR"].map { URL(fileURLWithPath: $0, isDirectory: true) }
             ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("Okumalik", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir
+    }()
+
+    /// Files that can be made again (small pictures); macOS may clear these.
+    nonisolated static let cacheDirectory: URL = {
+        let dir = ProcessInfo.processInfo.environment["OKUMALIK_DATA_DIR"].map { URL(fileURLWithPath: $0, isDirectory: true) }
+            ?? FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0].appendingPathComponent("Okumalik", isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir
     }()
@@ -126,14 +155,24 @@ final class Store: ObservableObject {
         saveTask?.cancel()
         saveTask = Task { [weak self] in
             try? await Task.sleep(for: .milliseconds(600))
-            guard !Task.isCancelled else { return }
-            self?.saveNow()
+            guard !Task.isCancelled, let self else { return }
+            let snapshot = self.snapshot
+            let url = Self.dataURL
+            Self.saveQueue.async { Self.write(snapshot, to: url) }
         }
     }
 
+    /// Writes now and waits; earlier writes still in the queue finish first.
     func saveNow() {
+        saveTask?.cancel()
+        let snapshot = self.snapshot
+        let url = Self.dataURL
+        Self.saveQueue.sync { Self.write(snapshot, to: url) }
+    }
+
+    private nonisolated static func write(_ snapshot: Snapshot, to url: URL) {
         guard let data = try? JSONEncoder.app.encode(snapshot) else { return }
-        try? data.write(to: Self.dataURL, options: .atomic)
+        try? data.write(to: url, options: .atomic)
     }
 
     // MARK: Backups
@@ -215,13 +254,45 @@ final class Store: ObservableObject {
 
     // MARK: Counts
 
-    var unreadLaterCount: Int { items.filter { $0.kind == .readLater && !$0.isRead }.count }
+    var unreadLaterCount: Int { items.reduce(0) { $0 + ($1.kind == .readLater && !$1.isRead ? 1 : 0) } }
+
+    /// Unread entries per feed, worked out in one pass for lists that show them all.
+    var unreadByFeed: [UUID: Int] {
+        var counts: [UUID: Int] = [:]
+        for entry in entries where !entry.isRead { counts[entry.feedID, default: 0] += 1 }
+        return counts
+    }
 
     func unreadCount(feed: UUID?) -> Int {
         entries.filter { !$0.isRead && (feed == nil || $0.feedID == feed) }.count
     }
 
     func feed(_ id: UUID) -> Feed? { feeds.first { $0.id == id } }
+
+    func item(_ id: UUID) -> SavedItem? {
+        if itemIndex == nil { itemIndex = Dictionary(items.indices.map { (items[$0].id, $0) }, uniquingKeysWith: { a, _ in a }) }
+        return itemIndex?[id].map { items[$0] }
+    }
+
+    func entry(_ id: String) -> FeedEntry? {
+        if entryIndex == nil { entryIndex = Dictionary(entries.indices.map { (entries[$0].id, $0) }, uniquingKeysWith: { a, _ in a }) }
+        return entryIndex?[id].map { entries[$0] }
+    }
+
+    /// Whether this address is on the reading list, unread.
+    func isQueued(_ url: URL) -> Bool {
+        if queuedKeys == nil {
+            queuedKeys = Set(items.filter { $0.kind == .readLater && !$0.isRead }.map { cachedDedupeKey($0.url) })
+        }
+        return queuedKeys?.contains(cachedDedupeKey(url)) ?? false
+    }
+
+    private func cachedDedupeKey(_ url: URL) -> String {
+        if let key = dedupeKeys[url] { return key }
+        let key = url.dedupeKey
+        dedupeKeys[url] = key
+        return key
+    }
 
     // MARK: URL scheme
 

@@ -59,7 +59,7 @@ struct TagChip: View {
     var body: some View {
         Button { action?() } label: {
             HStack(spacing: 4) {
-                Text("#" + tag)
+                Text("#" + tag).lineLimit(1)
                 if selected && action != nil {
                     Image(systemName: "xmark").font(.system(size: 8, weight: .bold)).opacity(0.6)
                 }

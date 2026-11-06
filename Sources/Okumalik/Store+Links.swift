@@ -90,8 +90,22 @@ extension Store {
     func backfillPageInfo() async {
         let key = "pageInfoBackfilled"
         guard !UserDefaults.standard.bool(forKey: key) else { return }
-        for item in items where item.imageURL == nil && item.author == nil {
-            await fetchInfo(for: item.id, keepTitle: true)
+        // Applied in groups: each change of a row's size makes the list rebuild.
+        var found: [(UUID, PageInfo.Info)] = []
+        let missing = items.filter { $0.imageURL == nil && $0.author == nil }
+        for (position, item) in missing.enumerated() {
+            if let info = try? await PageInfo.fetch(item.url) { found.append((item.id, info)) }
+            if found.count == 25 || position == missing.count - 1 {
+                var updated = items
+                for (id, info) in found {
+                    guard let i = updated.firstIndex(where: { $0.id == id }) else { continue }
+                    if updated[i].excerpt.isEmpty, let description = info.description { updated[i].excerpt = description }
+                    if updated[i].author == nil { updated[i].author = info.author }
+                    if updated[i].imageURL == nil { updated[i].imageURL = info.image }
+                }
+                if updated != items { items = updated }
+                found = []
+            }
         }
         UserDefaults.standard.set(true, forKey: key)
     }
@@ -100,10 +114,13 @@ extension Store {
         guard let url = items.first(where: { $0.id == id })?.url,
               let info = try? await PageInfo.fetch(url),
               let i = items.firstIndex(where: { $0.id == id }) else { return }
-        if !keepTitle, let title = info.title, !title.isEmpty { items[i].title = title }
-        if items[i].excerpt.isEmpty, let description = info.description { items[i].excerpt = description }
-        if items[i].author == nil { items[i].author = info.author }
-        if items[i].imageURL == nil { items[i].imageURL = info.image }
+        var item = items[i]
+        if !keepTitle, let title = info.title, !title.isEmpty { item.title = title }
+        if item.excerpt.isEmpty, let description = info.description { item.excerpt = description }
+        if item.author == nil { item.author = info.author }
+        if item.imageURL == nil { item.imageURL = info.image }
+        // Nothing new means no redraw of the lists.
+        if item != items[i] { items[i] = item }
     }
 
     // MARK: Editing
@@ -225,13 +242,19 @@ extension Store {
 
     // MARK: Search
 
-    /// Everything searchable about a saved link: its texts, tags, note, highlights and offline article.
-    func matches(_ item: SavedItem, _ query: String) -> Bool {
-        let fields = [item.title, item.url.absoluteString, item.excerpt, item.tags.joined(separator: " "), item.note ?? ""]
-        if fields.contains(where: { $0.localizedStandardContains(query) }) { return true }
-        if highlights(for: item.url).contains(where: { $0.text.localizedStandardContains(query) || ($0.note ?? "").localizedStandardContains(query) }) {
-            return true
-        }
-        return ArticleCache.shared.plainText(for: item.url)?.localizedStandardContains(query) ?? false
+    /// A saved link's own texts match, or its address is among `hits`
+    /// (pages whose highlights or offline article match, found separately).
+    func matches(_ item: SavedItem, _ query: String, hits: Set<URL>) -> Bool {
+        if hits.contains(item.url) { return true }
+        return item.title.localizedStandardContains(query)
+            || item.excerpt.localizedStandardContains(query)
+            || item.url.absoluteString.localizedStandardContains(query)
+            || (item.note ?? "").localizedStandardContains(query)
+            || item.tags.contains { $0.localizedStandardContains(query) }
+    }
+
+    /// Addresses of pages with a highlight matching the query.
+    func highlightHits(_ query: String) -> Set<URL> {
+        Set(highlights.filter { $0.text.localizedStandardContains(query) || ($0.note ?? "").localizedStandardContains(query) }.map(\.url))
     }
 }

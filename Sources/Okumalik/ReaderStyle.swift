@@ -165,6 +165,20 @@ extension Color {
     })
 }
 
+/// "2 gün önce", through one shared formatter: rows ask for this while scrolling.
+enum RelativeDate {
+    @MainActor private static let formatter: RelativeDateTimeFormatter = {
+        let f = RelativeDateTimeFormatter()
+        f.dateTimeStyle = .named
+        f.unitsStyle = .full
+        return f
+    }()
+
+    @MainActor static func string(_ date: Date) -> String {
+        formatter.localizedString(for: date, relativeTo: Date())
+    }
+}
+
 extension Notification.Name {
     static let okmHighlight = Notification.Name("okmHighlight")
     static let okmFind = Notification.Name("okmFind")

@@ -12,18 +12,34 @@ struct ItemListView: View {
     @State private var editing: UUID?
     @State private var tagFilter: String?
     @State private var confirmEmptyTrash = false
+    /// The search being applied: follows `search` after a short pause in typing.
+    @State private var query = ""
+    /// Pages found by what's inside them: highlights first, offline articles once scanned.
+    @State private var searchHits = Set<URL>()
+    /// Redraws the list when reading times change what Okunacaklar shows.
+    @State private var copyVersion = 0
+    @State private var memo = SavedMemo()
 
     enum QueueSort: String { case newest, oldest, shortest }
     enum QueueLength: String { case all, short, medium, long }
 
     var body: some View {
+        let _ = copyVersion
+        // Worked out once per update and handed down: these walk the whole library.
+        let results = savedResults
+        let counts = results.counts
+        let active = results.active
+        let saved = results.saved
         VStack(spacing: 0) {
-            header
-            if !stripTags.isEmpty { tagStrip }
+            header(counts: counts, active: active, savedCount: saved.count)
             Divider().opacity(0.5)
-            content
+            content(saved: saved, active: active)
         }
         .onChange(of: section) { tagFilter = nil }
+        .task(id: search) { await applySearch() }
+        .onReceive(ArticleCache.shared.changed) { _ in
+            if section == .readLater, queueSort == .shortest || queueLength != .all { copyVersion &+= 1 }
+        }
         .dropDestination(for: URL.self) { urls, _ in
             let kind: ItemKind = section == .bookmarks ? .bookmark : .readLater
             urls.filter { $0.scheme?.hasPrefix("http") == true }.forEach { store.addLink($0, kind: kind) }
@@ -42,19 +58,51 @@ struct ItemListView: View {
 
     private struct EditID: Identifiable { let id: UUID }
 
-    private var query: String { search.trimmingCharacters(in: .whitespaces) }
+    /// The section's links, filtered and sorted, kept until something they depend on changes.
+    /// Selecting a row, for one, redraws this view without changing any of it.
+    private var savedResults: SavedMemo.Results {
+        let key = SavedMemo.Key(version: store.itemsVersion, feedTags: section == .allFeeds ? store.feeds.map(\.tags) : [], section: section,
+                                tag: tagFilter, query: query, hits: searchHits, sort: queueSort, length: queueLength, copies: copyVersion)
+        if memo.key == key, let results = memo.results { return results }
+        let base = sectionItems
+        let counts = tagCounts(in: base)
+        let active = tagFilter.flatMap { counts[$0] != nil ? $0 : nil }
+        let results = SavedMemo.Results(counts: counts, active: active, saved: isSavedSection ? savedItems(base, tag: active) : [])
+        memo.key = key
+        memo.results = results
+        return results
+    }
+
+    private var isSavedSection: Bool { section == .readLater || section == .archive || section == .bookmarks }
+
+    /// Filters quickly by the link's own texts, then adds pages whose articles match when that scan is done.
+    private func applySearch() async {
+        let text = search.trimmingCharacters(in: .whitespaces)
+        guard !text.isEmpty else {
+            query = ""
+            searchHits = []
+            return
+        }
+        try? await Task.sleep(for: .milliseconds(180))
+        guard !Task.isCancelled else { return }
+        searchHits = store.highlightHits(text)
+        query = text
+        let found = await ArticleCache.shared.search(text, in: store.items.map(\.url))
+        guard !Task.isCancelled else { return }
+        searchHits.formUnion(found)
+    }
 
     private func matches(_ fields: String...) -> Bool {
         query.isEmpty || fields.contains { $0.localizedStandardContains(query) }
     }
 
     @ViewBuilder
-    private var content: some View {
+    private func content(saved: [SavedItem], active: String?) -> some View {
         switch section {
-        case .readLater, .archive, .bookmarks: savedList
+        case .readLater, .archive, .bookmarks: savedList(saved)
         case .highlights: highlightList
         case .trash: trashList
-        case .allFeeds, .feed: entryList
+        case .allFeeds, .feed: entryList(active: active)
         case .tag(let tag): tagList(tag)
         }
     }
@@ -74,9 +122,9 @@ struct ItemListView: View {
         }
     }
 
-    private var subtitle: String {
+    private func subtitle(savedCount: Int) -> String {
         switch section {
-        case .readLater, .archive, .bookmarks: "\(savedItems.count) bağlantı"
+        case .readLater, .archive, .bookmarks: "\(savedCount) bağlantı"
         case .highlights: "\(store.highlights.count) vurgu"
         case .trash: "\(Store.trashDays) gün sonra kalıcı olarak silinir"
         case .allFeeds: "\(store.unreadCount(feed: nil)) okunmamış"
@@ -94,19 +142,29 @@ struct ItemListView: View {
         return unread + " · güncellendi " + date.formatted(.relative(presentation: .named))
     }
 
-    private var header: some View {
+    private func header(counts: [String: Int], active: String?, savedCount: Int) -> some View {
         HStack(alignment: .center, spacing: 12) {
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text(title)
                     .font(.system(size: 22, weight: .semibold))
                     .lineLimit(1)
-                Text(subtitle)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
+                HStack(spacing: 6) {
+                    Text(subtitle(savedCount: savedCount))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                    if let active {
+                        TagChip(tag: active, selected: true, help: "Süzgeci kaldır") { tagFilter = nil }
+                    }
+                }
+                // The chip is taller than the text; the list below shouldn't move when it appears.
+                .frame(height: active == nil ? nil : 14)
             }
             Spacer()
-            headerActions
+            Group {
+                if !counts.isEmpty { tagMenu(counts: counts, active: active) }
+                headerActions
+            }
                 .buttonStyle(.plain)
                 .foregroundStyle(.secondary)
         }
@@ -175,47 +233,54 @@ struct ItemListView: View {
 
     // MARK: Tag filter
 
-    /// Tags used in this section, offered as filters under the header.
-    private var stripTags: [String] {
+    /// Tags used in this section and how often, offered by the header's "#" menu.
+    private func tagCounts(in base: [SavedItem]) -> [String: Int] {
+        var counts: [String: Int] = [:]
         switch section {
-        case .readLater, .archive, .bookmarks: Store.cleanTags(sectionItems.flatMap(\.tags))
-        case .allFeeds: Store.cleanTags(store.feeds.flatMap(\.tags))
-        default: []
+        case .readLater, .archive, .bookmarks:
+            for item in base { for tag in item.tags { counts[tag, default: 0] += 1 } }
+        case .allFeeds:
+            for feed in store.feeds { for tag in feed.tags { counts[tag, default: 0] += 1 } }
+        default:
+            break
         }
+        return counts
     }
 
-    /// The chosen filter, ignored once no item in the section carries it.
-    private var activeTag: String? {
-        tagFilter.flatMap { stripTags.contains($0) ? $0 : nil }
-    }
-
-    private var tagStrip: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 6) {
-                ForEach(stripTags, id: \.self) { tag in
-                    TagChip(tag: tag, selected: tag == activeTag,
-                            help: tag == activeTag ? "Süzgeci kaldır" : "Yalnızca #\(tag) olanları göster") {
-                        tagFilter = tag == activeTag ? nil : tag
-                    }
-                }
+    private func tagMenu(counts: [String: Int], active: String?) -> some View {
+        Menu {
+            if active != nil {
+                Button("Tümünü Göster") { tagFilter = nil }
+                Divider()
             }
-            .padding(.horizontal, 18)
+            ForEach(counts.keys.sorted { $0.localizedStandardCompare($1) == .orderedAscending }, id: \.self) { tag in
+                Toggle("#\(tag)  \(counts[tag] ?? 0)", isOn: Binding(
+                    get: { tag == active },
+                    set: { tagFilter = $0 ? tag : nil }
+                ))
+            }
+        } label: {
+            Image(systemName: active == nil ? "number.circle" : "number.circle.fill")
         }
-        .padding(.bottom, 10)
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help("Etikete göre süz")
     }
 
     // MARK: Lists
 
     /// A list with the shared context menu, double-click and Delete behaviour.
-    private func list<Rows: View>(@ViewBuilder _ rows: () -> Rows) -> some View {
-        List(selection: $selection, content: rows)
-            .listStyle(.plain)
-            .contextMenu(forSelectionType: DetailID.self) { ids in
-                if ids.count == 1, let id = ids.first { menu(for: id) } else if ids.count > 1 { bulkMenu(ids) }
-            } primaryAction: { ids in
-                ids.compactMap(url(for:)).forEach(Actions.open)
-            }
-            .onDeleteCommand { delete(selection) }
+    /// With a key it is built again only when the key changes; its rows follow their own data.
+    private func list<Rows: View>(key: ListKey? = nil, @ViewBuilder _ rows: @escaping () -> Rows) -> some View {
+        StableList(key: key, selection: $selection, rows: rows) { ids in
+            if ids.count == 1, let id = ids.first { menu(for: id) } else if ids.count > 1 { bulkMenu(ids) }
+        } open: { ids in
+            ids.compactMap(url(for:)).forEach(Actions.open)
+        } delete: {
+            delete(selection)
+        }
+        .equatable()
     }
 
     private var sectionItems: [SavedItem] {
@@ -229,17 +294,17 @@ struct ItemListView: View {
         }
     }
 
-    private var savedItems: [SavedItem] {
-        let tag = activeTag
-        let list = sectionItems
+    private func savedItems(_ base: [SavedItem], tag: String?) -> [SavedItem] {
+        let list = base
             .filter { tag == nil || $0.tags.contains(tag!) }
-            .filter { query.isEmpty || store.matches($0, query) }
+            .filter { query.isEmpty || store.matches($0, query, hits: searchHits) }
         return section == .readLater ? arranged(list) : list
     }
 
     /// Okunacaklar's sort order and reading-time filter.
     private func arranged(_ list: [SavedItem]) -> [SavedItem] {
-        let minutes = { (item: SavedItem) in ArticleCache.shared.minutes(for: item.url) }
+        let cache = ArticleCache.shared
+        let minutes = { (item: SavedItem) in cache.meta(for: item.url)?.minutes }
         let filtered = list.filter { item in
             guard queueLength != .all else { return true }
             guard let m = minutes(item) else { return false }
@@ -258,36 +323,45 @@ struct ItemListView: View {
     }
 
     @ViewBuilder
-    private var savedList: some View {
-        let items = savedItems
+    private func savedList(_ items: [SavedItem]) -> some View {
         if items.isEmpty {
             emptyState
         } else {
-            list { ForEach(items, id: \.rowKey, content: savedRow) }
+            let keys = items.map(\.rowKey)
+            list(key: ListKey(section: section, saved: keys)) {
+                ForEach(keys, id: \.self) { key in
+                    LiveItem(id: key.id, content: savedContent)
+                        .tag(DetailID.item(key.id))
+                        .draggable(TagTarget.item(key.id).dragToken)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func savedContent(_ item: SavedItem) -> some View {
+        if section == .bookmarks {
+            BookmarkRow(
+                item: item,
+                onTag: { tagFilter = $0 },
+                onEdit: { editing = item.id },
+                onMove: { store.setKind(item.id, .readLater) },
+                onDelete: { delete([.item(item.id)]) }
+            )
+        } else {
+            SavedRow(item: item, progress: store.position(for: item.url)).equatable()
         }
     }
 
     private func savedRow(_ item: SavedItem) -> some View {
-        Group {
-            if section == .bookmarks {
-                BookmarkRow(
-                    item: item,
-                    onTag: { tagFilter = $0 },
-                    onEdit: { editing = item.id },
-                    onMove: { store.setKind(item.id, .readLater) },
-                    onDelete: { delete([.item(item.id)]) }
-                )
-            } else {
-                SavedRow(item: item)
-            }
-        }
-        .tag(DetailID.item(item.id))
-        .draggable(TagTarget.item(item.id).dragToken)
+        savedContent(item)
+            .tag(DetailID.item(item.id))
+            .draggable(TagTarget.item(item.id).dragToken)
     }
 
     @ViewBuilder
     private func tagList(_ tag: String) -> some View {
-        let tagged = store.items.filter { $0.tags.contains(tag) && (query.isEmpty || store.matches($0, query)) }
+        let tagged = store.items.filter { $0.tags.contains(tag) && (query.isEmpty || store.matches($0, query, hits: searchHits)) }
         let groups: [(String, [SavedItem])] = [
             ("Okunacaklar", tagged.filter { $0.kind == .readLater && !$0.isRead }),
             ("Yer İmleri", tagged.filter { $0.kind == .bookmark }),
@@ -310,9 +384,8 @@ struct ItemListView: View {
                     }
                 }
                 if !entries.isEmpty {
-                    let queued = queuedKeys
                     Section {
-                        ForEach(entries) { entryRow($0, showFeed: true, queued: queued) }
+                        ForEach(entries) { entryRow($0, showFeed: true) }
                     } header: {
                         sectionHeader("Akışlar")
                     }
@@ -360,7 +433,7 @@ struct ItemListView: View {
             list {
                 if !links.isEmpty {
                     Section {
-                        ForEach(links) { SavedRow(item: $0).tag(DetailID.item($0.id)) }
+                        ForEach(links) { SavedRow(item: $0).equatable().tag(DetailID.item($0.id)) }
                     } header: {
                         sectionHeader("Bağlantılar")
                     }
@@ -378,10 +451,10 @@ struct ItemListView: View {
         }
     }
 
-    private var feedEntries: [FeedEntry] {
+    private func feedEntries(active: String?) -> [FeedEntry] {
         var feedID: UUID?
         if case .feed(let id) = section { feedID = id }
-        let taggedFeeds = activeTag.map { tag in Set(store.feeds.filter { $0.tags.contains(tag) }.map(\.id)) }
+        let taggedFeeds = active.map { tag in Set(store.feeds.filter { $0.tags.contains(tag) }.map(\.id)) }
         return store.entries
             .filter { feedID == nil || $0.feedID == feedID }
             .filter { taggedFeeds == nil || taggedFeeds!.contains($0.feedID) }
@@ -391,25 +464,29 @@ struct ItemListView: View {
     }
 
     @ViewBuilder
-    private var entryList: some View {
-        let entries = feedEntries
+    private func entryList(active: String?) -> some View {
+        let entries = feedEntries(active: active)
         if entries.isEmpty {
             emptyState
         } else {
-            let queued = queuedKeys
-            list { ForEach(entries) { entryRow($0, showFeed: section == .allFeeds, queued: queued) } }
+            let ids = entries.map(\.id)
+            let showFeed = section == .allFeeds
+            list(key: ListKey(section: section, entries: ids)) {
+                ForEach(ids, id: \.self) { id in
+                    LiveEntry(id: id) { entryContent($0, showFeed: showFeed) }
+                        .tag(DetailID.entry(id))
+                }
+            }
         }
     }
 
-    /// Addresses on the reading list, worked out once per list rather than per row.
-    private var queuedKeys: Set<String> {
-        Set(store.items.filter { $0.kind == .readLater && !$0.isRead }.map(\.url.dedupeKey))
+    private func entryContent(_ entry: FeedEntry, showFeed: Bool) -> EntryRow {
+        EntryRow(entry: entry, feedTitle: showFeed ? store.feed(entry.feedID)?.title : nil,
+                 queued: store.isQueued(entry.link))
     }
 
-    private func entryRow(_ entry: FeedEntry, showFeed: Bool, queued: Set<String>) -> some View {
-        EntryRow(entry: entry, feedTitle: showFeed ? store.feed(entry.feedID)?.title : nil,
-                 queued: queued.contains(entry.link.dedupeKey))
-            .tag(DetailID.entry(entry.id))
+    private func entryRow(_ entry: FeedEntry, showFeed: Bool) -> some View {
+        entryContent(entry, showFeed: showFeed).tag(DetailID.entry(entry.id))
     }
 
     // MARK: Actions
@@ -584,8 +661,93 @@ struct ItemListView: View {
     }
 }
 
+/// Holds the last results between redraws; a class so that storing them doesn't cause another.
+private final class SavedMemo {
+    struct Key: Equatable {
+        let version: Int
+        let feedTags: [[String]]
+        let section: SidebarSection
+        let tag: String?
+        let query: String
+        let hits: Set<URL>
+        let sort: ItemListView.QueueSort
+        let length: ItemListView.QueueLength
+        let copies: Int
+    }
+
+    struct Results {
+        let counts: [String: Int]
+        let active: String?
+        let saved: [SavedItem]
+    }
+
+    var key: Key?
+    var results: Results?
+}
+
+/// What decides a list's rows and their order.
+private struct ListKey: Equatable {
+    let section: SidebarSection
+    var saved: [SavedItem.RowKey] = []
+    var entries: [String] = []
+}
+
+/// The list itself, built again only when its key changes: rebuilding walks every row, however
+/// long the list is, so it mustn't happen each time something in the library changes.
+/// Without a key it follows every update, for lists that stay short.
+private struct StableList<Rows: View, Menu: View>: View, Equatable {
+    let key: ListKey?
+    @Binding var selection: Set<DetailID>
+    let rows: () -> Rows
+    @ViewBuilder let menu: (Set<DetailID>) -> Menu
+    let open: (Set<DetailID>) -> Void
+    let delete: () -> Void
+
+    nonisolated static func == (a: Self, b: Self) -> Bool { a.key != nil && a.key == b.key }
+
+    var body: some View {
+        List(selection: $selection, content: rows)
+            .listStyle(.plain)
+            .contextMenu(forSelectionType: DetailID.self, menu: menu, primaryAction: open)
+            .onDeleteCommand(perform: delete)
+    }
+}
+
+/// A row that reads its link from the library itself, so only rows on screen follow changes.
+private struct LiveItem<Content: View>: View {
+    @EnvironmentObject private var store: Store
+    let id: UUID
+    @ViewBuilder let content: (SavedItem) -> Content
+
+    // Always one view, never "maybe one": a row count that can vary makes the list walk every row.
+    var body: some View {
+        ZStack(alignment: .leading) {
+            if let item = store.item(id) { content(item) }
+        }
+    }
+}
+
+private struct LiveEntry<Content: View>: View {
+    @EnvironmentObject private var store: Store
+    let id: String
+    @ViewBuilder let content: (FeedEntry) -> Content
+
+    var body: some View {
+        ZStack(alignment: .leading) {
+            if let entry = store.entry(id) { content(entry) }
+        }
+    }
+}
+
 private extension SavedItem {
     /// Row identity that changes with the text, so the list re-measures the row when the
     /// title or description arrives after the link was added (otherwise it keeps the first height).
-    var rowKey: String { "\(id.uuidString)|\(title)|\(excerpt)|\(imageURL != nil)" }
+    /// Lengths rather than the texts: this is worked out for every row on every update.
+    struct RowKey: Hashable {
+        let id: UUID
+        let title, excerpt: Int
+        let image: Bool
+    }
+
+    var rowKey: RowKey { RowKey(id: id, title: title.utf8.count, excerpt: excerpt.utf8.count, image: imageURL != nil) }
 }

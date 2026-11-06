@@ -1,3 +1,4 @@
+import Combine
 import SwiftUI
 
 private func shortHost(_ url: URL) -> String {
@@ -6,34 +7,44 @@ private func shortHost(_ url: URL) -> String {
 
 /// A site's own icon at 16 pt; `placeholder` until (or unless) one is found.
 struct SiteIcon<Placeholder: View>: View {
-    @ObservedObject private var icons = SiteIcons.shared
     let url: URL
     @ViewBuilder var placeholder: Placeholder
+    @State private var loaded: NSImage?
 
     var body: some View {
-        let _ = icons.version
-        if let image = icons.icon(for: url) {
-            Image(nsImage: image)
-                .resizable()
-                .interpolation(.high)
-                .frame(width: 16, height: 16)
-                .clipShape(RoundedRectangle(cornerRadius: 3))
-        } else {
-            placeholder.frame(width: 16, height: 16)
+        Group {
+            if let image = loaded ?? SiteIcons.shared.cached(for: url) {
+                Image(nsImage: image)
+                    .resizable()
+                    .interpolation(.high)
+                    .frame(width: 16, height: 16)
+                    .clipShape(RoundedRectangle(cornerRadius: 3))
+            } else {
+                placeholder.frame(width: 16, height: 16)
+            }
+        }
+        .task(id: url) {
+            if SiteIcons.shared.cached(for: url) == nil { loaded = await SiteIcons.shared.load(for: url) }
         }
     }
 }
 
 /// A link in Okunacaklar, Arşiv, the trash or a tag page: title, description and the
 /// "site · author · time" line, a cover picture on the right and a reading-progress line.
-struct SavedRow: View {
-    @EnvironmentObject private var store: Store
-    @ObservedObject private var cache = ArticleCache.shared
+struct SavedRow: View, Equatable {
     @AppStorage("compactList") private var compact = false
+    /// Redraws this row alone when its own offline copy changes.
+    @State private var copyVersion = 0
     let item: SavedItem
+    var progress: Double?
+
+    private var cache: ArticleCache { .shared }
+
+    nonisolated static func == (a: SavedRow, b: SavedRow) -> Bool { a.item == b.item && a.progress == b.progress }
 
     var body: some View {
-        let article = cache.article(for: item.url)
+        let _ = copyVersion
+        let meta = cache.meta(for: item.url)
         HStack(alignment: .top, spacing: 12) {
             VStack(alignment: .leading, spacing: 4) {
                 Text(item.title)
@@ -46,7 +57,7 @@ struct SavedRow: View {
                         .lineLimit(2)
                 }
                 HStack(spacing: 5) {
-                    Text(byline(author: article?.author))
+                    Text(byline(meta))
                     ForEach(item.tags, id: \.self) { Text("#" + $0).foregroundStyle(Color.okmAccent.opacity(0.85)) }
                     Spacer(minLength: 0)
                     status
@@ -54,26 +65,27 @@ struct SavedRow: View {
                 .font(.system(size: 11))
                 .foregroundStyle(.tertiary)
                 .lineLimit(1)
-                if let p = store.position(for: item.url), p > 0.03, item.deletedAt == nil {
+                if let p = progress, p > 0.03, item.deletedAt == nil {
                     ProgressLine(value: p).padding(.top, 2)
                 }
             }
-            if !compact, let image = item.imageURL ?? article?.image.flatMap(URL.init(string:)) {
-                Cover(url: image)
+            if !compact, let image = item.imageURL ?? meta?.image.flatMap(URL.init(string:)) {
+                Cover(url: image).id(image)
             }
         }
         .padding(.vertical, compact ? 3 : 6)
+        .onReceive(cache.changed.filter { [url = item.url] in $0 == nil || $0 == url }) { _ in copyVersion &+= 1 }
     }
 
     /// "site · author · 6 dk · 2 gün önce"
-    private func byline(author: String?) -> String {
+    private func byline(_ meta: ArticleMeta?) -> String {
         var parts = [shortHost(item.url)]
-        if let author = (author ?? item.author).flatMap({ $0.isEmpty ? nil : $0 }), author != parts[0] { parts.append(author) }
-        if let minutes = cache.minutes(for: item.url) { parts.append("\(minutes) dk") }
+        if let author = (meta?.author ?? item.author).flatMap({ $0.isEmpty ? nil : $0 }), author != parts[0] { parts.append(author) }
+        if let minutes = meta?.minutes { parts.append("\(minutes) dk") }
         if let deleted = item.deletedAt {
-            parts.append("silindi " + deleted.formatted(.relative(presentation: .named)))
+            parts.append("silindi " + RelativeDate.string(deleted))
         } else {
-            parts.append(item.dateAdded.formatted(.relative(presentation: .named)))
+            parts.append(RelativeDate.string(item.dateAdded))
         }
         return parts.joined(separator: " · ")
     }
@@ -99,13 +111,9 @@ struct ProgressLine: View {
     let value: Double
 
     var body: some View {
-        GeometryReader { g in
-            Capsule().fill(.quaternary)
-                .overlay(alignment: .leading) {
-                    Capsule().fill(Color.okmAccent.opacity(0.7)).frame(width: g.size.width * min(1, value))
-                }
-        }
-        .frame(height: 2)
+        Capsule().fill(.quaternary)
+            .overlay(Capsule().fill(Color.okmAccent.opacity(0.7)).scaleEffect(x: min(1, value), anchor: .leading))
+            .frame(height: 2)
         .help("%\(Int(value * 100)) okundu")
     }
 }
@@ -113,17 +121,21 @@ struct ProgressLine: View {
 /// A page's cover picture, cropped to a small square.
 struct Cover: View {
     let url: URL
+    @State private var loaded: NSImage?
 
     var body: some View {
-        AsyncImage(url: url) { phase in
-            if let image = phase.image {
-                image.resizable().scaledToFill()
+        Group {
+            if let image = loaded ?? Thumbnails.shared.cached(url) {
+                Image(nsImage: image).resizable().scaledToFill()
             } else {
                 Rectangle().fill(.quaternary.opacity(0.5))
             }
         }
         .frame(width: 58, height: 58)
         .clipShape(RoundedRectangle(cornerRadius: 6))
+        .task {
+            if Thumbnails.shared.cached(url) == nil { loaded = await Thumbnails.shared.load(url) }
+        }
     }
 }
 
@@ -173,7 +185,7 @@ struct BookmarkRow: View {
             }
 
             HStack(spacing: 10) {
-                Text(item.dateAdded, format: .relative(presentation: .named))
+                Text(RelativeDate.string(item.dateAdded))
                 Text("|")
                 Group {
                     Button("Aç") { Actions.open(item.url) }
@@ -218,7 +230,7 @@ struct EntryRow: View {
                         Text(feedTitle)
                         Text("·")
                     }
-                    if let date = entry.date { Text(date, format: .relative(presentation: .named)) }
+                    if let date = entry.date { Text(RelativeDate.string(date)) }
                     if queued {
                         Image(systemName: "tray.full")
                             .foregroundStyle(Color.okmAccent.opacity(0.85))
