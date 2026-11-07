@@ -2,7 +2,7 @@ import AppKit
 
 /// What a shared passage or a page's highlights look like as a message.
 enum ShareText {
-    /// Letters and digits stay readable; everything else, also what the link format itself uses (- , &), is escaped.
+    /// Letters and digits stay readable; everything else is escaped, for the text in a WhatsApp address.
     private static let plain = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._~")
 
     static func escape(_ text: String) -> String {
@@ -21,26 +21,10 @@ enum ShareText {
         return c.string ?? url.absoluteString
     }
 
-    /// A link that opens the page at this passage and marks it, in browsers that support text fragments.
-    /// Long passages or ones spanning paragraphs are given by their first and last words.
-    static func link(to url: URL, passage: String) -> String {
-        let address = cleanAddress(url)
-        let words = passage.split(whereSeparator: \.isWhitespace).map(String.init)
-        guard url.scheme?.hasPrefix("http") == true, !words.isEmpty else { return address }
-        let spansLines = passage.trimmingCharacters(in: .whitespacesAndNewlines).contains(where: \.isNewline)
-        if words.count > 12 || (spansLines && words.count > 1) {
-            let edge = min(6, words.count / 2)
-            let start = words.prefix(edge).joined(separator: " ")
-            let end = words.suffix(edge).joined(separator: " ")
-            return address + "#:~:text=" + escape(start) + "," + escape(end)
-        }
-        return address + "#:~:text=" + escape(words.joined(separator: " "))
-    }
-
-    /// “Passage”, then the page's title and a link to the spot.
+    /// “Passage”, then the page's title and address.
     static func passage(_ text: String, title: String, url: URL) -> String {
         let quote = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        return "“\(quote)”\n\n\(title)\n\(link(to: url, passage: quote))"
+        return "“\(quote)”\n\n\(title)\n\(cleanAddress(url))"
     }
 
     /// The page's title and link, then its highlights. Notes stay out: they may be personal.
