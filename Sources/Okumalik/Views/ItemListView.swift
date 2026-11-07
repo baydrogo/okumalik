@@ -646,6 +646,7 @@ struct ItemListView: View {
 
     @ViewBuilder
     private func highlightMenu(_ h: Highlight) -> some View {
+        Button("Paylaş…") { Sharing.show(ShareText.passage(h.text, title: h.pageTitle, url: h.url)) }
         Button("Metni Kopyala") { Actions.copyText(h.text) }
         Button("Markdown Olarak Kopyala") {
             Actions.copyText(Store.markdown(title: h.pageTitle, url: h.url, highlights: [h]))

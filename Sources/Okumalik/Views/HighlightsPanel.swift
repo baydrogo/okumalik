@@ -29,6 +29,7 @@ struct HighlightsPanel: View {
                                 .contentShape(Rectangle())
                                 .onTapGesture { proxy.scroll(to: h.id) }
                                 .contextMenu {
+                                    Button("Paylaş…") { Sharing.show(ShareText.passage(h.text, title: title, url: url)) }
                                     Button("Metni Kopyala") { Actions.copyText(h.text) }
                                     Button("Markdown Olarak Kopyala") {
                                         Actions.copyText(Store.markdown(title: title, url: url, highlights: [h]))
@@ -46,6 +47,8 @@ struct HighlightsPanel: View {
                 }
                 Divider()
                 HStack {
+                    Button("Tümünü Paylaş") { Sharing.show(ShareText.highlights(list, title: title, url: url)) }
+                    Spacer()
                     Button("Markdown Kopyala") {
                         Actions.copyText(Store.markdown(title: title, url: url, highlights: list))
                     }

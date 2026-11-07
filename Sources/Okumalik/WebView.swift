@@ -56,10 +56,12 @@ final class ReaderWebView: WKWebView {
         if menu.items.contains(where: { $0.identifier?.rawValue == "WKMenuItemIdentifierCopy" }) {
             extra.append(item("Vurgula", #selector(highlightFromMenu)))
             extra.append(item("Not Ekle", #selector(noteFromMenu)))
+            extra.append(item("Seçimi Paylaş…", #selector(shareSelectionFromMenu)))
         }
         if let id = coordinator?.menuHighlight {
             let noted = coordinator?.hasNote(id) == true
             extra.append(item(noted ? "Notu Düzenle" : "Not Ekle", #selector(editNoteFromMenu), id))
+            extra.append(item("Vurguyu Paylaş…", #selector(shareHighlightFromMenu), id))
             extra.append(item("Vurguyu Kopyala", #selector(copyHighlightFromMenu), id))
             extra.append(item("Vurguyu Sil", #selector(deleteHighlightFromMenu), id))
         }
@@ -84,6 +86,12 @@ final class ReaderWebView: WKWebView {
 
     @objc private func noteFromMenu() { coordinator?.highlightSelection(withNote: true) }
 
+    @objc private func shareSelectionFromMenu() { coordinator?.shareSelection() }
+
+    @objc private func shareHighlightFromMenu(_ sender: NSMenuItem) {
+        (sender.representedObject as? UUID).map { coordinator?.shareHighlight($0) }
+    }
+
     @objc private func editNoteFromMenu(_ sender: NSMenuItem) {
         (sender.representedObject as? UUID).map { coordinator?.editNote($0) }
     }
@@ -107,6 +115,8 @@ struct WebView: NSViewRepresentable {
     let proxy: ReaderProxy
     /// Where reading stopped last time (0…1).
     var position: Double? = nil
+    /// The page's title, for what gets shared from it.
+    var title = ""
     let onHighlight: (UUID, String) -> Void
     let onDelete: (UUID) -> Void
     /// A note was written for a highlight; empty removes it.
@@ -355,6 +365,21 @@ struct WebView: NSViewRepresentable {
             run("window.__okm.setNotes(\(String(decoding: data, as: UTF8.self))); true")
         }
 
+        func share(_ passage: String) {
+            guard !passage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+            Sharing.show(ShareText.passage(passage, title: parent.title, url: parent.url))
+        }
+
+        func shareSelection() {
+            run("window.getSelection().toString()") { [weak self] in
+                if let text = $0 as? String { self?.share(text) }
+            }
+        }
+
+        func shareHighlight(_ id: UUID) {
+            if let h = parent.highlights.first(where: { $0.id == id }) { share(h.text) }
+        }
+
         func copyHighlight(_ id: UUID) {
             if let h = parent.highlights.first(where: { $0.id == id }) { Actions.copyText(h.text) }
         }
@@ -424,6 +449,8 @@ struct WebView: NSViewRepresentable {
             case "note": if let id { parent.onNote(id, (body["text"] as? String) ?? "") }
             case "discard": id.map(parent.onDiscard)
             case "copy": (body["text"] as? String).map(Actions.copyText)
+            case "share": (body["text"] as? String).map(share)
+            case "shareHighlight": id.map(shareHighlight)
             case "copyHighlight": id.map(copyHighlight)
             case "delete": id.map(deleteHighlight)
             case "context": menuHighlight = id

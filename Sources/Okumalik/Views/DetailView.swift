@@ -110,7 +110,8 @@ struct DetailView: View {
             highlights: store.highlights(for: url),
             focus: focus,
             proxy: proxy,
-            position: store.position(for: url)
+            position: store.position(for: url),
+            title: title
         ) { id, text in
             store.addHighlight(id: id, url: url, title: title, text: text)
         } onDelete: { id in
@@ -265,6 +266,9 @@ struct DetailView: View {
         let highlights = store.highlights(for: subject.url)
         if !highlights.isEmpty {
             Divider()
+            Button("Vurguları Paylaş…") {
+                Sharing.show(ShareText.highlights(highlights, title: subject.title, url: subject.url))
+            }
             Button("Vurguları Markdown Olarak Kopyala") {
                 Actions.copyText(Store.markdown(title: subject.title, url: subject.url, highlights: highlights))
             }

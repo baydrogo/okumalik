@@ -146,6 +146,7 @@ enum ReaderScript {
         highlight: '<path d="M9.5 3.5l3 3L7 12H4V9z"/><path d="M3 14.5h10"/>',
         copy: '<rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 3.5v-.5a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h.5"/>',
         note: '<path d="M2.5 3.5h11v7.5H7l-3 2.5V11H2.5z"/>',
+        share: '<path d="M8 10V2M5 4.8L8 2l3 2.8"/><path d="M4.5 7H3v7h10V7h-1.5"/>',
         trash: '<path d="M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.7 9h5.6l.7-9"/>'
       },
       popup: function () {
@@ -154,11 +155,11 @@ enum ReaderScript {
         host.style.cssText = 'all:initial;position:fixed;left:0;top:0;z-index:2147483647;display:none';
         var root = host.attachShadow({ mode: 'closed' });
         root.innerHTML = '<style>' +
-          '.box{background:#26231F;border-radius:9px;max-width:340px;' +
+          '.box{background:#26231F;border-radius:9px;width:max-content;' +
           'box-shadow:0 8px 28px rgba(0,0,0,.28),0 0 0 .5px rgba(255,255,255,.1);' +
           'font:500 12.5px -apple-system,system-ui,sans-serif}' +
           '.bar{display:flex;align-items:stretch;padding:3px}' +
-          '.text{padding:9px 12px 5px;color:#F4EFE6;font-weight:400;line-height:1.45;white-space:pre-wrap;max-height:130px;overflow:auto}' +
+          '.text{max-width:340px;padding:9px 12px 5px;color:#F4EFE6;font-weight:400;line-height:1.45;white-space:pre-wrap;max-height:130px;overflow:auto}' +
           '.editor{padding:4px;width:310px}' +
           'textarea{all:unset;display:block;box-sizing:border-box;width:100%;height:84px;padding:8px;color:#F4EFE6;font-weight:400;line-height:1.45;white-space:pre-wrap;overflow:auto}' +
           'textarea::placeholder{color:rgba(244,239,230,.45)}' +
@@ -268,6 +269,7 @@ enum ReaderScript {
           this.show(sel.getRangeAt(0).getBoundingClientRect(), [
             { icon: 'highlight', label: 'Vurgula', run: function () { self.post({ action: 'highlight' }); } },
             { icon: 'note', label: 'Not Ekle', run: function () { self.post({ action: 'highlight', note: true }); } },
+            { icon: 'share', label: 'Paylaş', run: function () { self.post({ action: 'share', text: sel.toString() }); } },
             { icon: 'copy', label: 'Kopyala', run: function () { self.post({ action: 'copy', text: sel.toString() }); } }
           ]);
           return;
@@ -278,6 +280,7 @@ enum ReaderScript {
         var id = m.getAttribute('data-okm'), note = this.notes[id];
         this.show(this.markRect(id), [
           { icon: 'note', label: note ? 'Notu Düzenle' : 'Not Ekle', run: function () { self.noteEditor(id, note, false); } },
+          { icon: 'share', label: 'Paylaş', run: function () { self.post({ action: 'shareHighlight', id: id }); } },
           { icon: 'copy', label: 'Kopyala', run: function () { self.post({ action: 'copyHighlight', id: id }); } },
           { icon: 'trash', label: 'Sil', danger: true, run: function () { self.post({ action: 'delete', id: id }); } }
         ], note);

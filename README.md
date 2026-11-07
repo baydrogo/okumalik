@@ -20,6 +20,7 @@ Xcode gerekmez; Command Line Tools yeterli.
 - **Sütunlar** — kenar çubuğu ⌃⌘S ile gizlenir; Odak Modu (⇧⌘F) yalnızca yazıyı bırakır.
 - **Çevrimdışı kopya** — Okunacaklar'a eklenen ve okuma modunda açılan yazılar saklanır, anında ve internetsiz açılır. Yazı sitede değiştiyse "…" > "Yazıyı Siteden Yeniden Al".
 - **Vurgular ve notlar** — metni seçince beliren araç çubuğundan "Vurgula" (ya da ⇧⌘H). Seçime "Not Ekle" (⇧⌘N) ile doğrudan not yazılır. Vurguya tıklayınca ya da sağ tıklayınca not eklenir, kopyalanır, silinir; notlu vurgular noktalı çizgiyle görünür. Bağlantılara "Düzenle…" ile not yazılır.
+- **Alıntı paylaşma** — seçili metin ya da vurgu, menüdeki "Paylaş" ile başlık ve doğrudan o cümleyi açan bağlantıyla WhatsApp ya da başka bir kanala gönderilir; yan paneldeki "Tümünü Paylaş" sayfanın vurgularını tek mesajda paylaşır. Notlar paylaşılmaz.
 - **Dışa aktarma** — yazının tamamı (başlık bilgileri, not ve vurgularla) ya da yalnızca vurgular Markdown olarak kopyalanır veya kaydedilir. Ayarlar'da Obsidian klasörü seçilirse "…" > "Obsidian'a Gönder" notu doğrudan kasaya yazar.
 
 **Kaydetme ve düzenleme**
