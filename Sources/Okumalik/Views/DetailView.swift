@@ -9,7 +9,7 @@ struct DetailView: View {
     @AppStorage("readerMode") private var reader = true
     @AppStorage("readerFont") private var font: ReaderFont = .newYork
     @AppStorage("readerSize") private var size = 19
-    @AppStorage("readerTheme") private var theme: ReaderTheme = .auto
+    @AppStorage(ReaderTheme.key) private var theme: ReaderTheme = .auto
     @AppStorage("showPanel") private var showPanel = false
     @StateObject private var proxy = ReaderProxy()
     @State private var showTypography = false
@@ -76,6 +76,8 @@ struct DetailView: View {
                 }
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .themed(.page)
         .onReceive(NotificationCenter.default.publisher(for: .okmHighlight)) { _ in proxy.highlight() }
         .onReceive(NotificationCenter.default.publisher(for: .okmNote)) { _ in proxy.addNote() }
         .onReceive(NotificationCenter.default.publisher(for: .okmPanel)) { _ in showPanel.toggle() }
@@ -140,6 +142,7 @@ struct DetailView: View {
         .inspector(isPresented: $showPanel) {
             SidePanel(url: url, title: title, item: item, entry: entry, proxy: proxy)
                 .inspectorColumnWidth(min: 240, ideal: 290, max: 400)
+                .themed(.list)
         }
     }
 

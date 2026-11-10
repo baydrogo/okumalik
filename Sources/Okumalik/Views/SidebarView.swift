@@ -65,6 +65,7 @@ struct SidebarView: View {
         }
         .listStyle(.sidebar)
         .safeAreaInset(edge: .bottom, spacing: 0) { bottomBar }
+        .themed(.sidebar)
         .alert("Akışı Yeniden Adlandır", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
             TextField("Ad", text: $newName)
             Button("Kaydet") { if let feed = renaming { store.renameFeed(feed.id, to: newName) } }

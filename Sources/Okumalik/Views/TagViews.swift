@@ -139,3 +139,131 @@ struct FlowLayout: Layout {
         return rows
     }
 }
+
+// MARK: Showing and filtering by tags
+
+extension Color {
+    /// A soft color of its own for each tag, the same everywhere and on every launch.
+    static func tag(_ name: String) -> Color {
+        var hash: UInt32 = 2166136261
+        for byte in name.utf8 { hash = (hash ^ UInt32(byte)) &* 16777619 }
+        let hue = CGFloat(hash % 360) / 360
+        // Deep enough to read on light paper, lighter on dark backgrounds.
+        return Color(nsColor: NSColor(name: nil) { appearance in
+            appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+                ? NSColor(hue: hue, saturation: 0.45, brightness: 0.88, alpha: 1)
+                : NSColor(hue: hue, saturation: 0.7, brightness: 0.5, alpha: 1)
+        })
+    }
+}
+
+/// A tag on a row: a small tinted capsule, clickable when `action` is given.
+struct TagPill: View {
+    let tag: String
+    var action: (() -> Void)?
+
+    var body: some View {
+        let color = Color.tag(tag)
+        let label = Text(tag)
+            .font(.system(size: 10.5, weight: .medium))
+            .lineLimit(1)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 1.5)
+            .foregroundStyle(color)
+            .background(Capsule().fill(color.opacity(0.13)))
+        if let action {
+            Button(action: action) { label.contentShape(Capsule()) }
+                .buttonStyle(.plain)
+                .help("Yalnızca #\(tag) olanları göster")
+        } else {
+            label
+        }
+    }
+}
+
+/// A row's tags: the first few as capsules, the rest counted.
+struct TagPills: View {
+    let tags: [String]
+    var limit = 3
+    var action: ((String) -> Void)?
+
+    var body: some View {
+        HStack(spacing: 4) {
+            ForEach(tags.prefix(limit), id: \.self) { tag in
+                TagPill(tag: tag, action: action.map { act in { act(tag) } })
+            }
+            if tags.count > limit {
+                Text("+\(tags.count - limit)")
+                    .font(.system(size: 10.5, weight: .medium))
+                    .foregroundStyle(.tertiary)
+                    .help(tags.dropFirst(limit).map { "#" + $0 }.joined(separator: " "))
+            }
+        }
+        .fixedSize()
+    }
+}
+
+/// The tags of a list under its title, with how many rows carry each. Clicking one filters by it;
+/// several chosen together show only what carries all of them.
+struct TagStrip: View {
+    let counts: [String: Int]
+    @Binding var selected: Set<String>
+
+    private var ordered: [String] {
+        // Chosen tags first, then the most used.
+        counts.keys.sorted {
+            let a = selected.contains($0), b = selected.contains($1)
+            if a != b { return a }
+            if counts[$0] != counts[$1] { return counts[$0]! > counts[$1]! }
+            return $0.localizedStandardCompare($1) == .orderedAscending
+        }
+    }
+
+    var body: some View {
+        HStack(spacing: 8) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    ForEach(ordered, id: \.self) { tag in
+                        chip(tag)
+                    }
+                }
+                .padding(.vertical, 1)
+            }
+            if !selected.isEmpty {
+                Button("Temizle") { withAnimation(.easeOut(duration: 0.15)) { selected = [] } }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 11.5, weight: .medium))
+                    .foregroundStyle(Color.okmAccent)
+                    .help("Etiket süzgecini kaldır")
+            }
+        }
+        .padding(.horizontal, 18)
+        .padding(.bottom, 10)
+    }
+
+    private func chip(_ tag: String) -> some View {
+        let on = selected.contains(tag)
+        let color = Color.tag(tag)
+        return Button {
+            withAnimation(.easeOut(duration: 0.15)) {
+                if on { selected.remove(tag) } else { selected.insert(tag) }
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Text("#" + tag).lineLimit(1)
+                Text("\(counts[tag] ?? 0)")
+                    .monospacedDigit()
+                    .opacity(on ? 0.85 : 0.5)
+            }
+            .font(.system(size: 11.5, weight: .medium))
+            .padding(.horizontal, 9)
+            .padding(.vertical, 3.5)
+            .foregroundStyle(on ? Color.white : color)
+            .background(Capsule().fill(on ? color : color.opacity(0.12)))
+            .overlay(Capsule().strokeBorder(color.opacity(on ? 0 : 0.25), lineWidth: 0.5))
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .help(on ? "#\(tag) süzgecini kaldır" : "Yalnızca #\(tag) olanları göster")
+    }
+}

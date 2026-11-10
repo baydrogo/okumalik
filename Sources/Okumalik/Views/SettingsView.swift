@@ -10,6 +10,7 @@ struct SettingsView: View {
     @AppStorage(Store.obsidianFolderKey) private var obsidianFolder = ""
     @AppStorage("compactList") private var compact = false
     @AppStorage(AppAppearance.key) private var appearance = AppAppearance.system
+    @AppStorage(ReaderTheme.key) private var theme: ReaderTheme = .auto
     @State private var status: String?
     @State private var pendingRestore: Store.Snapshot?
     @State private var renamingTag: String?
@@ -26,14 +27,18 @@ struct SettingsView: View {
         TabView {
             tab {
                 Section {
-                    Picker("Uygulama", selection: $appearance) {
+                    Picker("Renk teması", selection: $theme) {
+                        ForEach(ReaderTheme.allCases) { Text($0.name).tag($0) }
+                    }
+                    Picker("Açık / koyu", selection: Binding(get: { appearance }, set: { appearance = $0; theme = .auto })) {
                         ForEach(AppAppearance.allCases) { Text($0.name).tag($0) }
                     }
                     .pickerStyle(.segmented)
+                    .disabled(theme != .auto)
                 } header: {
                     Text("Görünüm")
                 } footer: {
-                    Text("Okuma teması Otomatik ise yazı alanı da uygulamanın görünümünü izler. Kâğıt, Beyaz, Sepya ya da Gece seçiliyse o tema korunur.")
+                    Text("Renk teması bütün pencereyi boyar: kenar çubuğu, liste, okuma alanı ve sağ panel. Otomatik’te açık ya da koyu görünüm buradaki seçime (ya da macOS’a) uyar; Kâğıt, Beyaz ve Sepya açık, Gece koyu görünür.")
                         .foregroundStyle(.secondary)
                 }
                 Section("Okuma") {

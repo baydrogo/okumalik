@@ -66,24 +66,76 @@ enum AppAppearance: String, CaseIterable, Identifiable {
 
 private struct AppearanceFollower: ViewModifier {
     @AppStorage(AppAppearance.key) private var appearance = AppAppearance.system
+    @AppStorage(ReaderTheme.key) private var theme: ReaderTheme = .auto
 
     func body(content: Content) -> some View {
-        content.onChange(of: appearance, initial: true) { NSApp.appearance = appearance.nsAppearance }
+        content
+            .onChange(of: appearance, initial: true) { apply() }
+            .onChange(of: theme) { apply() }
+    }
+
+    /// A chosen color theme sets light or dark for the whole app; "Otomatik" leaves it to the setting.
+    private func apply() {
+        NSApp.appearance = theme == .auto
+            ? appearance.nsAppearance
+            : NSAppearance(named: theme.palette(dark: false).dark ? .darkAqua : .aqua)
+    }
+}
+
+/// Paints a part of the window in the color theme: its background, and text in the theme's ink.
+private struct ThemedSurface: ViewModifier {
+    let surface: ReaderTheme.Surface
+    @AppStorage(ReaderTheme.key) private var theme: ReaderTheme = .auto
+    @Environment(\.colorScheme) private var colorScheme
+
+    func body(content: Content) -> some View {
+        let palette = theme.palette(dark: colorScheme == .dark)
+        content
+            .scrollContentBackground(.hidden)
+            .foregroundStyle(ThemeInk(color: Color(hex: palette.fg)))
+            .background(Color(hex: palette.color(for: surface)).ignoresSafeArea())
+    }
+}
+
+/// The theme's text color, white on a selected row so it stays readable on the highlight.
+private struct ThemeInk: ShapeStyle {
+    let color: Color
+
+    func resolve(in environment: EnvironmentValues) -> Color.Resolved {
+        (environment.backgroundProminence == .increased ? Color.white : color).resolve(in: environment)
     }
 }
 
 extension View {
     /// Keeps the app's appearance in step with the setting while this view is on screen.
     func followsAppAppearance() -> some View { modifier(AppearanceFollower()) }
+
+    /// Gives this part of the window the color theme's background and text color.
+    func themed(_ surface: ReaderTheme.Surface) -> some View { modifier(ThemedSurface(surface: surface)) }
 }
 
 enum ReaderTheme: String, CaseIterable, Identifiable {
     case auto, paper, white, sepia, night
     var id: Self { self }
 
+    static let key = "readerTheme"
+
+    /// The parts of the window, each a shade of the theme: the page lightest, the sidebar deepest.
+    enum Surface { case sidebar, list, page }
+
     struct Palette: Equatable {
         let bg, fg, muted, link: String
         let dark: Bool
+        /// Backgrounds of the middle list and the sidebar.
+        let list, side: String
+
+        func color(for surface: Surface) -> String {
+            switch surface {
+            case .sidebar: side
+            case .list: list
+            case .page: bg
+            }
+        }
     }
 
     var name: String {
@@ -99,10 +151,14 @@ enum ReaderTheme: String, CaseIterable, Identifiable {
     func palette(dark: Bool) -> Palette {
         switch self {
         case .auto: (dark ? ReaderTheme.night : .paper).palette(dark: dark)
-        case .paper: Palette(bg: "#F7F3EB", fg: "#2B2825", muted: "#8C857A", link: "#2F5FAF", dark: false)
-        case .white: Palette(bg: "#FFFFFF", fg: "#1D1D1F", muted: "#8A8A8E", link: "#2463C4", dark: false)
-        case .sepia: Palette(bg: "#F1E5CC", fg: "#4A3A28", muted: "#94806A", link: "#36598F", dark: false)
-        case .night: Palette(bg: "#1C1B1A", fg: "#D9D4CC", muted: "#8A857D", link: "#8AB4F8", dark: true)
+        case .paper: Palette(bg: "#F7F3EB", fg: "#2B2825", muted: "#8C857A", link: "#2F5FAF", dark: false,
+                             list: "#F2EDE3", side: "#E9E2D5")
+        case .white: Palette(bg: "#FFFFFF", fg: "#1D1D1F", muted: "#8A8A8E", link: "#2463C4", dark: false,
+                             list: "#FAFAFA", side: "#F0F0F2")
+        case .sepia: Palette(bg: "#F1E5CC", fg: "#4A3A28", muted: "#94806A", link: "#36598F", dark: false,
+                             list: "#ECDFC3", side: "#E2D1B0")
+        case .night: Palette(bg: "#1C1B1A", fg: "#D9D4CC", muted: "#8A857D", link: "#8AB4F8", dark: true,
+                             list: "#21201E", side: "#171615")
         }
     }
 }

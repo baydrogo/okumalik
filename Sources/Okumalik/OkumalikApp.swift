@@ -8,6 +8,12 @@ struct OkumalikApp: App {
     @AppStorage("readerSize") private var size = 19
     @AppStorage("compactList") private var compact = false
     @AppStorage(AppAppearance.key) private var appearance = AppAppearance.system
+    @AppStorage(ReaderTheme.key) private var theme: ReaderTheme = .auto
+
+    /// Choosing light or dark hands the colors back to "Otomatik": a fixed theme would override it.
+    private var appearanceChoice: Binding<AppAppearance> {
+        Binding(get: { appearance }, set: { appearance = $0; theme = .auto })
+    }
 
     var body: some Scene {
         Window("Okumalık", id: "main") {
@@ -28,12 +34,16 @@ struct OkumalikApp: App {
                 Toggle("Sıkı Liste", isOn: $compact)
                     .keyboardShortcut("l", modifiers: [.command, .option])
                 Divider()
-                Picker("Uygulama Görünümü", selection: $appearance) {
+                Picker("Renk Teması", selection: $theme) {
+                    ForEach(ReaderTheme.allCases) { Text($0.name).tag($0) }
+                }
+                Picker("Uygulama Görünümü", selection: appearanceChoice) {
                     ForEach(AppAppearance.allCases) { Text($0.name).tag($0) }
                 }
                 Button("Açık ve Koyu Arasında Geç") {
                     let dark = NSApp.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
                     appearance = dark ? .light : .dark
+                    theme = .auto
                 }
                 .keyboardShortcut("d", modifiers: [.command, .shift])
                 Divider()

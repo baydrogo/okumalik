@@ -56,9 +56,12 @@ struct SavedRow: View, Equatable {
                         .foregroundStyle(.secondary)
                         .lineLimit(2)
                 }
+                if !compact, !item.tags.isEmpty {
+                    TagPills(tags: item.tags).padding(.top, 1)
+                }
                 HStack(spacing: 5) {
                     Text(byline(meta))
-                    ForEach(item.tags, id: \.self) { Text("#" + $0).foregroundStyle(Color.okmAccent.opacity(0.85)) }
+                    if compact, !item.tags.isEmpty { TagPills(tags: item.tags, limit: 2) }
                     Spacer(minLength: 0)
                     status
                 }
@@ -167,15 +170,9 @@ struct BookmarkRow: View {
             }
 
             if !item.tags.isEmpty || !item.excerpt.isEmpty {
-                HStack(spacing: 6) {
-                    ForEach(item.tags, id: \.self) { tag in
-                        Button("#" + tag) { onTag(tag) }
-                            .buttonStyle(.plain)
-                            .foregroundStyle(Color.okmAccent.opacity(0.8))
-                            .help("Yalnızca #\(tag) olanları göster")
-                    }
-                    if !item.tags.isEmpty && !item.excerpt.isEmpty {
-                        Text("|").foregroundStyle(.tertiary)
+                HStack(spacing: 8) {
+                    if !item.tags.isEmpty {
+                        TagPills(tags: item.tags, limit: 4, action: onTag)
                     }
                     if !item.excerpt.isEmpty {
                         Text(item.excerpt).foregroundStyle(.secondary).lineLimit(1)

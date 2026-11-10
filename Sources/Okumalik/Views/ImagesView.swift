@@ -8,15 +8,18 @@ import UniformTypeIdentifiers
 struct ImagesView: View {
     @EnvironmentObject private var store: Store
     @State private var search = ""
-    @State private var tagFilter: String?
+    @State private var tagFilter = Set<String>()
     @State private var open: UUID?
     @State private var dropping = false
     @FocusState private var gridFocused: Bool
 
     private var shown: [SavedImage] {
         let query = search.trimmingCharacters(in: .whitespaces)
+        // A chosen tag that no picture carries any more (renamed, deleted) no longer filters.
+        let inUse = Set(store.images.flatMap(\.tags))
+        let active = tagFilter.filter(inUse.contains)
         return store.images.filter { image in
-            if let tagFilter, !image.tags.contains(tagFilter) { return false }
+            if !active.allSatisfy(image.tags.contains) { return false }
             guard !query.isEmpty else { return true }
             if query.hasPrefix("#") {
                 let tag = Store.normalizedTag(query) ?? ""
@@ -53,6 +56,7 @@ struct ImagesView: View {
                 }
             }
         }
+        .themed(.list)
         .focusable()
         .focusEffectDisabled()
         .focused($gridFocused)
@@ -107,39 +111,12 @@ struct ImagesView: View {
             HStack(alignment: .center, spacing: 12) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Görseller").font(.system(size: 22, weight: .semibold))
-                    HStack(spacing: 6) {
-                        Text(store.images.isEmpty ? "Henüz görsel yok" : "\(count) görsel")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        if let tagFilter {
-                            TagChip(tag: tagFilter, selected: true, help: "Süzgeci kaldır") { self.tagFilter = nil }
-                        }
-                    }
-                    .frame(height: tagFilter == nil ? nil : 14)
+                    Text(store.images.isEmpty ? "Henüz görsel yok" : "\(count) görsel")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
                 Spacer()
                 Group {
-                    let counts = tagCounts
-                    if !counts.isEmpty {
-                        Menu {
-                            if tagFilter != nil {
-                                Button("Tümünü Göster") { tagFilter = nil }
-                                Divider()
-                            }
-                            ForEach(counts.keys.sorted { $0.localizedStandardCompare($1) == .orderedAscending }, id: \.self) { tag in
-                                Toggle("#\(tag)  \(counts[tag] ?? 0)", isOn: Binding(
-                                    get: { tag == tagFilter },
-                                    set: { tagFilter = $0 ? tag : nil }
-                                ))
-                            }
-                        } label: {
-                            Image(systemName: tagFilter == nil ? "number.circle" : "number.circle.fill")
-                        }
-                        .menuStyle(.borderlessButton)
-                        .menuIndicator(.hidden)
-                        .fixedSize()
-                        .help("Etikete göre süz")
-                    }
                     Button { addFromFiles() } label: { Image(systemName: "plus") }
                         .help("Dosyadan görsel ekle")
                 }
@@ -149,6 +126,14 @@ struct ImagesView: View {
             .padding(.horizontal, 18)
             .padding(.top, 6)
             .padding(.bottom, 12)
+
+            let counts = tagCounts
+            if !counts.isEmpty {
+                TagStrip(counts: counts, selected: Binding(
+                    get: { tagFilter.filter { counts[$0] != nil } },
+                    set: { tagFilter = $0 }
+                ))
+            }
         }
     }
 

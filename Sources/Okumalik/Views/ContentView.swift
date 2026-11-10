@@ -52,9 +52,44 @@ struct ContentView: View {
             .onReceive(NotificationCenter.default.publisher(for: .okmSearch)) { _ in
                 if columns == "detail" { columns = "all" }
             }
-            .onReceive(NotificationCenter.default.publisher(for: .okmFocus)) { _ in
-                withAnimation { columns = columns == "detail" ? "all" : "detail" }
+            .onReceive(NotificationCenter.default.publisher(for: .okmFocus)) { _ in toggleFocus() }
+            // Focus mode is for reading: it ends when there's nothing open, and doesn't outlive the app.
+            .onAppear { if columns == "detail" { columns = "all" } }
+            .onChange(of: focusable) { if columns == "detail", !focusable { withAnimation { columns = "all" } } }
+    }
+
+    /// Focus mode needs a page to show; otherwise hiding the columns would leave an empty window.
+    private var focusable: Bool { section != .images && opensPage }
+
+    private func toggleFocus() {
+        if columns == "detail" {
+            withAnimation { columns = "all" }
+        } else if focusable {
+            withAnimation { columns = "detail" }
+        } else {
+            store.notify("Odak modu için önce bir yazı açın")
+        }
+    }
+
+    /// The way out of focus mode, at the top corner of the page; Esc does the same.
+    @ViewBuilder
+    private var focusExit: some View {
+        if columns == "detail" {
+            Button { toggleFocus() } label: {
+                Label("Odaktan Çık", systemImage: "arrow.down.right.and.arrow.up.left")
+                    .font(.system(size: 11.5, weight: .medium))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(.regularMaterial, in: Capsule())
+                    .contentShape(Capsule())
             }
+            .buttonStyle(.plain)
+            .foregroundStyle(.secondary)
+            .keyboardShortcut(.escape, modifiers: [])
+            .help("Odak modundan çık (Esc ya da ⇧⌘F)")
+            .padding(12)
+            .transition(.opacity)
+        }
     }
 
     /// A row in the list that needs the reading pane: anything but a bookmark.
@@ -87,6 +122,7 @@ struct ContentView: View {
                     .navigationSplitViewColumnWidth(min: 280, ideal: 340, max: 480)
             } detail: {
                 DetailView(selection: single)
+                    .overlay(alignment: .topLeading) { focusExit }
             }
         }
     }

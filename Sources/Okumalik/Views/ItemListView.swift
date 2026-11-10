@@ -11,7 +11,7 @@ struct ItemListView: View {
     @AppStorage("queueSort") private var queueSort = QueueSort.newest
     @AppStorage("queueLength") private var queueLength = QueueLength.all
     @State private var editing: UUID?
-    @State private var tagFilter: String?
+    @State private var tagFilter = Set<String>()
     @State private var confirmEmptyTrash = false
     /// The search being applied: follows `search` after a short pause in typing.
     @State private var query = ""
@@ -33,7 +33,10 @@ struct ItemListView: View {
         let saved = results.saved
         VStack(spacing: 0) {
             searchField
-            header(counts: counts, active: active, savedCount: results.total)
+            header(savedCount: results.total)
+            if query.isEmpty, !counts.isEmpty {
+                TagStrip(counts: counts, selected: $tagFilter)
+            }
             Divider().opacity(0.5)
             if query.isEmpty {
                 content(saved: saved, active: active)
@@ -41,8 +44,9 @@ struct ItemListView: View {
                 searchList(results)
             }
         }
+        .themed(.list)
         .onReceive(NotificationCenter.default.publisher(for: .okmSearch)) { _ in searchFocused = true }
-        .onChange(of: section) { tagFilter = nil }
+        .onChange(of: section) { tagFilter = [] }
         .task(id: search) { await applySearch() }
         .onReceive(ArticleCache.shared.changed) { _ in
             if section == .readLater, query.isEmpty, queueSort == .shortest || queueLength != .all { copyVersion &+= 1 }
@@ -79,7 +83,7 @@ struct ItemListView: View {
         }
         let base = sectionItems
         let counts = tagCounts(in: base)
-        let active = tagFilter.flatMap { counts[$0] != nil ? $0 : nil }
+        let active = tagFilter.filter { counts[$0] != nil }
         let results = SavedMemo.Results(counts: counts, active: active, saved: isSavedSection ? savedItems(base, tag: active) : [])
         memo.key = key
         memo.results = results
@@ -115,7 +119,7 @@ struct ItemListView: View {
     }
 
     @ViewBuilder
-    private func content(saved: [SavedItem], active: String?) -> some View {
+    private func content(saved: [SavedItem], active: Set<String>) -> some View {
         switch section {
         case .readLater, .archive, .bookmarks: savedList(saved)
         case .highlights: highlightList
@@ -189,28 +193,20 @@ struct ItemListView: View {
         .help("Başlık, özet, not, vurgu ve yazı içinde arar; etiket için #etiket yazın (⌥⌘F)")
     }
 
-    private func header(counts: [String: Int], active: String?, savedCount: Int) -> some View {
+    private func header(savedCount: Int) -> some View {
         HStack(alignment: .center, spacing: 12) {
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)
                     .font(.system(size: 22, weight: .semibold))
                     .lineLimit(1)
-                HStack(spacing: 6) {
-                    Text(subtitle(savedCount: savedCount))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
-                    if let active {
-                        TagChip(tag: active, selected: true, help: "Süzgeci kaldır") { tagFilter = nil }
-                    }
-                }
-                // The chip is taller than the text; the list below shouldn't move when it appears.
-                .frame(height: active == nil ? nil : 14)
+                Text(subtitle(savedCount: savedCount))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
             }
             Spacer()
             Group {
                 if query.isEmpty {
-                    if !counts.isEmpty { tagMenu(counts: counts, active: active) }
                     headerActions
                 }
             }
@@ -296,27 +292,6 @@ struct ItemListView: View {
         return counts
     }
 
-    private func tagMenu(counts: [String: Int], active: String?) -> some View {
-        Menu {
-            if active != nil {
-                Button("Tümünü Göster") { tagFilter = nil }
-                Divider()
-            }
-            ForEach(counts.keys.sorted { $0.localizedStandardCompare($1) == .orderedAscending }, id: \.self) { tag in
-                Toggle("#\(tag)  \(counts[tag] ?? 0)", isOn: Binding(
-                    get: { tag == active },
-                    set: { tagFilter = $0 ? tag : nil }
-                ))
-            }
-        } label: {
-            Image(systemName: active == nil ? "number.circle" : "number.circle.fill")
-        }
-        .menuStyle(.borderlessButton)
-        .menuIndicator(.hidden)
-        .fixedSize()
-        .help("Etikete göre süz")
-    }
-
     // MARK: Lists
 
     /// A list with the shared context menu, double-click and Delete behaviour.
@@ -343,9 +318,8 @@ struct ItemListView: View {
         }
     }
 
-    private func savedItems(_ base: [SavedItem], tag: String?) -> [SavedItem] {
-        let list = base
-            .filter { tag == nil || $0.tags.contains(tag!) }
+    private func savedItems(_ base: [SavedItem], tag: Set<String>) -> [SavedItem] {
+        let list = tag.isEmpty ? base : base.filter { item in tag.allSatisfy(item.tags.contains) }
         return section == .readLater ? arranged(list) : list
     }
 
@@ -390,7 +364,7 @@ struct ItemListView: View {
         if section == .bookmarks, query.isEmpty {
             BookmarkRow(
                 item: item,
-                onTag: { tagFilter = $0 },
+                onTag: { tag in withAnimation(.easeOut(duration: 0.15)) { _ = tagFilter.insert(tag) } },
                 onEdit: { editing = item.id },
                 onMove: { store.setKind(item.id, .readLater) },
                 onDelete: { delete([.item(item.id)]) }
@@ -415,7 +389,7 @@ struct ItemListView: View {
             .filter { entry in taggedFeeds.map { $0.contains(entry.feedID) } ?? matches(entry.title, entry.summary, entry.link.absoluteString) }
             .sorted { ($0.date ?? .distantPast) > ($1.date ?? .distantPast) }
             .prefix(200)
-        return SavedMemo.Results(counts: [:], active: nil, saved: saved, quotes: quotes.map(\.id), entries: entries.map(\.id))
+        return SavedMemo.Results(counts: [:], active: [], saved: saved, quotes: quotes.map(\.id), entries: entries.map(\.id))
     }
 
     @ViewBuilder
@@ -520,10 +494,10 @@ struct ItemListView: View {
         }
     }
 
-    private func feedEntries(active: String?) -> [FeedEntry] {
+    private func feedEntries(active: Set<String>) -> [FeedEntry] {
         var feedID: UUID?
         if case .feed(let id) = section { feedID = id }
-        let taggedFeeds = active.map { tag in Set(store.feeds.filter { $0.tags.contains(tag) }.map(\.id)) }
+        let taggedFeeds = active.isEmpty ? nil : Set(store.feeds.filter { feed in active.allSatisfy(feed.tags.contains) }.map(\.id))
         return store.entries
             .filter { feedID == nil || $0.feedID == feedID }
             .filter { taggedFeeds == nil || taggedFeeds!.contains($0.feedID) }
@@ -532,7 +506,7 @@ struct ItemListView: View {
     }
 
     @ViewBuilder
-    private func entryList(active: String?) -> some View {
+    private func entryList(active: Set<String>) -> some View {
         let entries = feedEntries(active: active)
         if entries.isEmpty {
             emptyState
@@ -735,7 +709,7 @@ private final class SavedMemo {
         let version, highlights, entries: Int
         let feedTags: [[String]]
         let section: SidebarSection
-        let tag: String?
+        let tag: Set<String>
         let query: String
         let hits: Set<URL>
         let sort: ItemListView.QueueSort
@@ -745,7 +719,7 @@ private final class SavedMemo {
 
     struct Results {
         let counts: [String: Int]
-        let active: String?
+        let active: Set<String>
         let saved: [SavedItem]
         var quotes: [UUID] = []
         var entries: [String] = []
