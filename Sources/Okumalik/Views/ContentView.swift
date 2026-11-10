@@ -7,19 +7,21 @@ struct ContentView: View {
     @State private var selection = Set<DetailID>()
     @State private var search = ""
     @State private var newTag = ""
-    /// Which columns show: all, without the sidebar, or the reading pane alone (focus mode).
+    /// Which columns show: all, or without the sidebar.
     @AppStorage("columns") private var columns = "all"
+    /// Focus mode: the page alone, filling the window. macOS can't fold a split view's middle
+    /// column, so this is a layout of its own rather than a column setting.
+    @State private var focusing = false
 
     private var visibility: Binding<NavigationSplitViewVisibility> {
         Binding(
             get: {
                 switch columns {
                 case "double": .doubleColumn
-                case "detail": .detailOnly
                 default: .all
                 }
             },
-            set: { columns = $0 == .detailOnly ? "detail" : $0 == .doubleColumn ? "double" : "all" }
+            set: { columns = $0 == .all ? "all" : "double" }
         )
     }
 
@@ -50,22 +52,22 @@ struct ContentView: View {
             .onAppear { store.undoManager = undoManager }
             .onChange(of: undoManager) { store.undoManager = undoManager }
             .onReceive(NotificationCenter.default.publisher(for: .okmSearch)) { _ in
-                if columns == "detail" { columns = "all" }
+                if focusing { focusing = false }
             }
             .onReceive(NotificationCenter.default.publisher(for: .okmFocus)) { _ in toggleFocus() }
             // Focus mode is for reading: it ends when there's nothing open, and doesn't outlive the app.
-            .onAppear { if columns == "detail" { columns = "all" } }
-            .onChange(of: focusable) { if columns == "detail", !focusable { withAnimation { columns = "all" } } }
+            .onAppear { if columns == "detail" { columns = "all" } }  // left by older versions
+            .onChange(of: focusable) { if focusing, !focusable { withAnimation { focusing = false } } }
     }
 
     /// Focus mode needs a page to show; otherwise hiding the columns would leave an empty window.
     private var focusable: Bool { section != .images && opensPage }
 
     private func toggleFocus() {
-        if columns == "detail" {
-            withAnimation { columns = "all" }
+        if focusing {
+            withAnimation { focusing = false }
         } else if focusable {
-            withAnimation { columns = "detail" }
+            withAnimation { focusing = true }
         } else {
             store.notify("Odak modu için önce bir yazı açın")
         }
@@ -74,7 +76,7 @@ struct ContentView: View {
     /// The way out of focus mode, at the top corner of the page; Esc does the same.
     @ViewBuilder
     private var focusExit: some View {
-        if columns == "detail" {
+        if focusing {
             Button { toggleFocus() } label: {
                 Label("Odaktan Çık", systemImage: "arrow.down.right.and.arrow.up.left")
                     .font(.system(size: 11.5, weight: .medium))
@@ -102,7 +104,10 @@ struct ContentView: View {
     /// Bookmarks need no preview: their list takes the whole width next to the sidebar.
     @ViewBuilder
     private var split: some View {
-        if section == .images {
+        if focusing, let single {
+            DetailView(selection: single)
+                .overlay(alignment: .topLeading) { focusExit }
+        } else if section == .images {
             NavigationSplitView(columnVisibility: visibility) {
                 sidebar
             } detail: {
@@ -122,7 +127,6 @@ struct ContentView: View {
                     .navigationSplitViewColumnWidth(min: 280, ideal: 340, max: 480)
             } detail: {
                 DetailView(selection: single)
-                    .overlay(alignment: .topLeading) { focusExit }
             }
         }
     }
