@@ -346,7 +346,10 @@ enum ReaderScript {
           self.hide();
           var t = e.target && e.target.closest ? e.target : e.target && e.target.parentElement;
           var m = t && t.closest('mark.okm-hl');
-          self.post({ action: 'context', id: m ? m.getAttribute('data-okm') : null });
+          var img = t && t.closest('img, picture');
+          if (img && img.tagName === 'PICTURE') img = img.querySelector('img');
+          self.post({ action: 'context', id: m ? m.getAttribute('data-okm') : null,
+                      image: img ? (img.currentSrc || img.src || null) : null });
         }, true);
         document.addEventListener('keydown', function () { self.hide(); }, true);
         window.addEventListener('scroll', function () { self.hide(); }, true);

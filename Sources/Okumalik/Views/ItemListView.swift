@@ -121,6 +121,7 @@ struct ItemListView: View {
         case .highlights: highlightList
         case .trash: trashList
         case .allFeeds, .feed: entryList(active: active)
+        case .images: EmptyView()  // Shown by ImagesView instead.
         }
     }
 
@@ -132,6 +133,7 @@ struct ItemListView: View {
         case .readLater: "Okunacaklar"
         case .archive: "Arşiv"
         case .bookmarks: "Yer İmleri"
+        case .images: "Görseller"
         case .highlights: "Vurgular"
         case .trash: "Çöp Kutusu"
         case .allFeeds: "Akışlar"
@@ -144,6 +146,7 @@ struct ItemListView: View {
         return switch section {
         case .readLater, .archive, .bookmarks: "\(savedCount) bağlantı"
         case .highlights: "\(store.highlights.count) vurgu"
+        case .images: "\(store.images.count) görsel"
         case .trash: "\(Store.trashDays) gün sonra kalıcı olarak silinir"
         case .allFeeds: "\(store.unreadCount(feed: nil)) okunmamış"
         case .feed(let id): feedStatus(id)
@@ -703,6 +706,8 @@ struct ItemListView: View {
                 empty("Arşiv boş", "Okuduklarınızı arşivlediğinizde burada görünür.")
             case .bookmarks:
                 empty("Yer imi yok", "⌘N ile yer imi ekleyin.")
+            case .images:
+                empty("Görsel yok", "")
             case .highlights:
                 empty("Henüz vurgu yok", "Bir yazıda metni seçip ⇧⌘H’ye basın.")
             case .trash:

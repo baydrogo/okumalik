@@ -79,6 +79,25 @@ struct Highlight: Identifiable, Codable, Hashable {
     var deletedAt: Date?
 }
 
+/// A picture saved from a web page or dropped in, kept as a file under Images/.
+struct SavedImage: Identifiable, Codable, Hashable {
+    var id = UUID()
+    /// File name inside the Images folder.
+    var file: String
+    /// Where the picture itself came from, when it came from the web.
+    var source: URL?
+    /// The page it was on.
+    var page: URL?
+    var pageTitle: String?
+    var width: Int
+    var height: Int
+    var tags: [String] = []
+    var note: String?
+    var dateAdded = Date()
+
+    var aspect: Double { height > 0 && width > 0 ? Double(height) / Double(width) : 1 }
+}
+
 /// An article as extracted by the reader (Defuddle), also the format of the offline copy.
 struct ArticleInfo: Codable {
     var url: String
@@ -105,7 +124,7 @@ extension ArticleInfo {
 }
 
 enum SidebarSection: Hashable {
-    case readLater, archive, bookmarks, highlights, trash, allFeeds
+    case readLater, archive, bookmarks, images, highlights, trash, allFeeds
     case feed(UUID)
 }
 
@@ -113,6 +132,7 @@ enum SidebarSection: Hashable {
 enum TagTarget: Hashable {
     case item(UUID)
     case feed(UUID)
+    case image(UUID)
 }
 
 enum DetailID: Hashable {

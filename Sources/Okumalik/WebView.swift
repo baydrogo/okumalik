@@ -65,6 +65,11 @@ final class ReaderWebView: WKWebView {
             extra.append(item("Vurguyu Kopyala", #selector(copyHighlightFromMenu), id))
             extra.append(item("Vurguyu Sil", #selector(deleteHighlightFromMenu), id))
         }
+        if let image = coordinator?.menuImage, coordinator?.parent.onSaveImage != nil {
+            let save = item("Görsellere Kaydet", #selector(saveImageFromMenu))
+            save.representedObject = image
+            extra.append(save)
+        }
         guard !extra.isEmpty else { return }
         if !menu.items.isEmpty { extra.append(.separator()) }
         for (i, item) in extra.enumerated() { menu.insertItem(item, at: i) }
@@ -73,6 +78,7 @@ final class ReaderWebView: WKWebView {
     override func didCloseMenu(_ menu: NSMenu, with event: NSEvent?) {
         super.didCloseMenu(menu, with: event)
         coordinator?.menuHighlight = nil
+        coordinator?.menuImage = nil
     }
 
     private func item(_ title: String, _ action: Selector, _ id: UUID? = nil) -> NSMenuItem {
@@ -80,6 +86,10 @@ final class ReaderWebView: WKWebView {
         item.target = self
         item.representedObject = id
         return item
+    }
+
+    @objc private func saveImageFromMenu(_ sender: NSMenuItem) {
+        (sender.representedObject as? URL).map { coordinator?.parent.onSaveImage?($0) }
     }
 
     @objc private func highlightFromMenu() { coordinator?.highlightSelection() }
@@ -126,6 +136,8 @@ struct WebView: NSViewRepresentable {
     var onProgress: ((Double) -> Void)? = nil
     /// Called when scrolling turns down (true) or up (false).
     var onScrollDirection: ((Bool) -> Void)? = nil
+    /// "Görsellere Kaydet" on a picture in the page.
+    var onSaveImage: ((URL) -> Void)? = nil
 
     func makeCoordinator() -> Coordinator { Coordinator(parent: self) }
 
@@ -199,6 +211,8 @@ struct WebView: NSViewRepresentable {
         var lastFocus: UUID?
         /// The highlight under the pointer when the context menu was requested.
         var menuHighlight: UUID?
+        /// The picture under the pointer when the context menu was requested.
+        var menuImage: URL?
         /// The reader page on screen is built from this extracted article.
         private var article: ArticleInfo?
         private var readerNavigation: WKNavigation?
@@ -453,7 +467,9 @@ struct WebView: NSViewRepresentable {
             case "shareHighlight": id.map(shareHighlight)
             case "copyHighlight": id.map(copyHighlight)
             case "delete": id.map(deleteHighlight)
-            case "context": menuHighlight = id
+            case "context":
+                menuHighlight = id
+                menuImage = (body["image"] as? String).flatMap(URL.init(string:))
             case "direction":
                 parent.onScrollDirection?((body["down"] as? Bool) ?? false)
             case "progress":

@@ -124,6 +124,8 @@ struct DetailView: View {
             store.setPosition(value, for: url)
         } onScrollDirection: { down in
             withAnimation(.easeOut(duration: 0.2)) { barVisible = !down }
+        } onSaveImage: { image in
+            store.saveImage(from: image, page: url, title: title)
         }
         .background(Color(nsColor: reader ? style.backgroundColor : .textBackgroundColor))
         .overlay(alignment: .topTrailing) { floatingBar(subject) }

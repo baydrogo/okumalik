@@ -16,6 +16,8 @@ struct SidebarView: View {
                     .tag(SidebarSection.readLater)
                 Label("Yer İmleri", systemImage: "bookmark")
                     .tag(SidebarSection.bookmarks)
+                Label("Görseller", systemImage: "photo.on.rectangle")
+                    .tag(SidebarSection.images)
                 Label("Vurgular", systemImage: "highlighter")
                     .tag(SidebarSection.highlights)
                 Label("Arşiv", systemImage: "archivebox")

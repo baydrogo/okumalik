@@ -20,6 +20,8 @@ final class Store: ObservableObject {
         }
     }
     @Published var highlights: [Highlight] = [] { didSet { scheduleSave() } }
+    /// Saved pictures, newest first.
+    @Published var images: [SavedImage] = [] { didSet { scheduleSave() } }
     /// Deleted links and highlights, kept for `trashDays` days.
     @Published var trash: [SavedItem] = [] { didSet { scheduleSave() } }
     @Published var trashedHighlights: [Highlight] = [] { didSet { scheduleSave() } }
@@ -82,6 +84,7 @@ final class Store: ObservableObject {
         var feeds: [Feed] = []
         var entries: [FeedEntry] = []
         var highlights: [Highlight] = []
+        var images: [SavedImage] = []
         var trash: [SavedItem] = []
         var trashedHighlights: [Highlight] = []
         var positions: [String: Double] = [:]
@@ -96,6 +99,7 @@ final class Store: ObservableObject {
             feeds = try c.decodeIfPresent([Feed].self, forKey: .feeds) ?? []
             entries = try c.decodeIfPresent([FeedEntry].self, forKey: .entries) ?? []
             highlights = try c.decodeIfPresent([Highlight].self, forKey: .highlights) ?? []
+            images = try c.decodeIfPresent([SavedImage].self, forKey: .images) ?? []
             trash = try c.decodeIfPresent([SavedItem].self, forKey: .trash) ?? []
             trashedHighlights = try c.decodeIfPresent([Highlight].self, forKey: .trashedHighlights) ?? []
             positions = try c.decodeIfPresent([String: Double].self, forKey: .positions) ?? [:]
@@ -120,6 +124,8 @@ final class Store: ObservableObject {
             guard let self else { return }
             ArticleCache.shared.prefetch(self.items.filter { $0.kind == .readLater && !$0.isRead }.map(\.url))
             self.cleanUp()
+            // Only at launch: during a session, deleted pictures can still be brought back.
+            self.sweepImageFiles()
             await self.backfillPageInfo()
         }
     }
@@ -132,6 +138,7 @@ final class Store: ObservableObject {
         s.feeds = feeds
         s.entries = entries
         s.highlights = highlights
+        s.images = images
         s.trash = trash
         s.trashedHighlights = trashedHighlights
         s.positions = positions
@@ -144,6 +151,7 @@ final class Store: ObservableObject {
         feeds = s.feeds
         entries = s.entries
         highlights = s.highlights
+        images = s.images
         trash = s.trash
         trashedHighlights = s.trashedHighlights
         positions = s.positions
@@ -296,11 +304,19 @@ final class Store: ObservableObject {
 
     // MARK: URL scheme
 
-    /// okumalik://add?url=…&title=…&tags=a,b  ·  okumalik://bookmark?url=…  ·  okumalik://feed?url=…
+    /// okumalik://add?url=…&title=…&tags=a,b  ·  okumalik://bookmark?url=…  ·  okumalik://feed?url=…  ·  okumalik://image?src=…&page=…
     func handleOpenURL(_ url: URL) {
         guard url.scheme == "okumalik",
               let components = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return }
         let query = Dictionary((components.queryItems ?? []).map { ($0.name, $0.value ?? "") }, uniquingKeysWith: { a, _ in a })
+        if url.host() == "image" {
+            // okumalik://image?src=…&page=…&title=…&tags=a,b
+            guard let src = query["src"].flatMap(URL.init(string:)) else { return }
+            let page = query["page"].flatMap(URL.init(string:))
+            let title = query["title"].flatMap { $0.isEmpty ? nil : $0 }
+            saveImage(from: src, page: page, title: title, tags: Self.parseTags(query["tags"] ?? ""))
+            return
+        }
         guard let raw = query["url"], let target = Self.normalizedURL(raw) else { return }
         let title = query["title"].flatMap { $0.isEmpty ? nil : $0 }
         let tags = Self.parseTags(query["tags"] ?? "")

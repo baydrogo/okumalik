@@ -67,7 +67,13 @@ struct ContentView: View {
     /// Bookmarks need no preview: their list takes the whole width next to the sidebar.
     @ViewBuilder
     private var split: some View {
-        if section == .bookmarks, !opensPage {
+        if section == .images {
+            NavigationSplitView(columnVisibility: visibility) {
+                sidebar
+            } detail: {
+                ImagesView()
+            }
+        } else if section == .bookmarks, !opensPage {
             NavigationSplitView(columnVisibility: visibility) {
                 sidebar
             } detail: {

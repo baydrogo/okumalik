@@ -22,6 +22,7 @@ extension Store {
         var counts: [String: Int] = [:]
         for item in items { for tag in item.tags { counts[tag, default: 0] += 1 } }
         for feed in feeds { for tag in feed.tags { counts[tag, default: 0] += 1 } }
+        for image in images { for tag in image.tags { counts[tag, default: 0] += 1 } }
         return counts
     }
 
@@ -29,6 +30,7 @@ extension Store {
         switch target {
         case .item(let id): items.first { $0.id == id }?.tags ?? []
         case .feed(let id): feeds.first { $0.id == id }?.tags ?? []
+        case .image(let id): images.first { $0.id == id }?.tags ?? []
         }
     }
 
@@ -38,6 +40,9 @@ extension Store {
         case .feed(let id):
             guard let i = feeds.firstIndex(where: { $0.id == id }) else { return }
             feeds[i].tags = Self.cleanTags(tags)
+        case .image(let id):
+            guard let i = images.firstIndex(where: { $0.id == id }) else { return }
+            images[i].tags = Self.cleanTags(tags)
         }
     }
 
@@ -58,10 +63,14 @@ extension Store {
         for i in feeds.indices where feeds[i].tags.contains(old) {
             feeds[i].tags = Self.cleanTags(feeds[i].tags.filter { $0 != old } + [new])
         }
+        for i in images.indices where images[i].tags.contains(old) {
+            images[i].tags = Self.cleanTags(images[i].tags.filter { $0 != old } + [new])
+        }
     }
 
     func deleteTag(_ tag: String) {
         for i in items.indices where items[i].tags.contains(tag) { items[i].tags.removeAll { $0 == tag } }
         for i in feeds.indices where feeds[i].tags.contains(tag) { feeds[i].tags.removeAll { $0 == tag } }
+        for i in images.indices where images[i].tags.contains(tag) { images[i].tags.removeAll { $0 == tag } }
     }
 }
