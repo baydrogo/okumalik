@@ -188,15 +188,28 @@ struct TagPills: View {
     var action: ((String) -> Void)?
 
     var body: some View {
+        // As many as the row has room for, never cut off at the edge.
+        ViewThatFits(in: .horizontal) {
+            ForEach(Array(stride(from: min(limit, tags.count), through: 1, by: -1)), id: \.self) { n in
+                pills(n)
+            }
+            Text("+\(tags.count)")
+                .font(.system(size: 10.5, weight: .medium))
+                .foregroundStyle(.tertiary)
+                .help(tags.map { "#" + $0 }.joined(separator: " "))
+        }
+    }
+
+    private func pills(_ n: Int) -> some View {
         HStack(spacing: 4) {
-            ForEach(tags.prefix(limit), id: \.self) { tag in
+            ForEach(tags.prefix(n), id: \.self) { tag in
                 TagPill(tag: tag, action: action.map { act in { act(tag) } })
             }
-            if tags.count > limit {
-                Text("+\(tags.count - limit)")
+            if tags.count > n {
+                Text("+\(tags.count - n)")
                     .font(.system(size: 10.5, weight: .medium))
                     .foregroundStyle(.tertiary)
-                    .help(tags.dropFirst(limit).map { "#" + $0 }.joined(separator: " "))
+                    .help(tags.dropFirst(n).map { "#" + $0 }.joined(separator: " "))
             }
         }
         .fixedSize()
@@ -219,26 +232,41 @@ struct TagStrip: View {
         }
     }
 
+    /// How many tags show before "+N" when the strip is folded: about two lines in a narrow list.
+    private let folded = 8
+    @AppStorage("tagStripOpen") private var open = false
+
     var body: some View {
-        HStack(spacing: 8) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 6) {
-                    ForEach(ordered, id: \.self) { tag in
-                        chip(tag)
-                    }
-                }
-                .padding(.vertical, 1)
+        let all = ordered
+        // Chosen tags come first, so folding never hides one of them.
+        let shown = open ? all : Array(all.prefix(max(folded, selected.count)))
+        FlowLayout(spacing: 5) {
+            ForEach(shown, id: \.self) { tag in chip(tag) }
+            if all.count > shown.count {
+                textButton("+\(all.count - shown.count) etiket", help: "Bütün etiketleri göster") { open = true }
+            } else if open, all.count > folded {
+                textButton("Daha az", help: "Yalnızca en çok kullanılanları göster") { open = false }
             }
             if !selected.isEmpty {
-                Button("Temizle") { withAnimation(.easeOut(duration: 0.15)) { selected = [] } }
-                    .buttonStyle(.plain)
-                    .font(.system(size: 11.5, weight: .medium))
-                    .foregroundStyle(Color.okmAccent)
-                    .help("Etiket süzgecini kaldır")
+                textButton("Temizle", help: "Etiket süzgecini kaldır") { selected = [] }
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 18)
         .padding(.bottom, 10)
+    }
+
+    private func textButton(_ title: String, help: String, action: @escaping () -> Void) -> some View {
+        Button { withAnimation(.easeOut(duration: 0.15), action) } label: {
+            Text(title)
+                .font(.system(size: 11, weight: .medium))
+                .padding(.horizontal, 6)
+                .padding(.vertical, 3)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(Color.okmAccent)
+        .help(help)
     }
 
     private func chip(_ tag: String) -> some View {
@@ -255,9 +283,9 @@ struct TagStrip: View {
                     .monospacedDigit()
                     .opacity(on ? 0.85 : 0.5)
             }
-            .font(.system(size: 11.5, weight: .medium))
-            .padding(.horizontal, 9)
-            .padding(.vertical, 3.5)
+            .font(.system(size: 11, weight: .medium))
+            .padding(.horizontal, 8)
+            .padding(.vertical, 3)
             .foregroundStyle(on ? Color.white : color)
             .background(Capsule().fill(on ? color : color.opacity(0.12)))
             .overlay(Capsule().strokeBorder(color.opacity(on ? 0 : 0.25), lineWidth: 0.5))
