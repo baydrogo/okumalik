@@ -404,6 +404,8 @@ enum ReaderScript {
     ::selection{background:transparent}
     :is(p,li,dt,dd,h1,h2,h3,h4,h5,h6,blockquote,figcaption,pre,td,th)::selection,
     :is(p,li,dt,dd,h1,h2,h3,h4,h5,h6,blockquote,figcaption,pre,td,th) *::selection{background:var(--okm-sel,rgba(0,122,255,.2))}
+    /* WebKit fills the space beside selected lines out to the nearest positioned block; without this it ran to the window's edges. */
+    :is(p,li,dt,dd,h1,h2,h3,h4,h5,h6,blockquote,figcaption,pre){position:relative}
     """#
 
     /// Extracts the page's article as JSON (`ArticleInfo` with `content`), or null if there is none.
